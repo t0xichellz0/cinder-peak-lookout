@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { MapControls } from "./vendor/MapControls.js";
 
 const K = 3.6;            // vertical exaggeration
-const TEX = 32;           // ground texture pixels per tile
+const TEX = 48;           // ground texture pixels per tile
 const COL = {
   F: "#2b472a", T: "#2b472a", C: "#2b472a", H: "#2b472a", O: "#2b472a",
   M: "#647a42", R: "#8b867c", S: "#e8edef", W: "#2f5a74", G: "#66773f", L: "#6f6342", P: "#998f80",
@@ -15,6 +15,7 @@ const groundRock = { value: 1 }, treeTime = { value: 0 }, windAmp = { value: .3 
 let renderer, scene, camera, controls, sun, hemi, ground, groundTex, baseCanvas, snowCanvas, paintCanvas, water;
 let trees = null, treeMeta = [], tower, julian, cabWin, smoke = [], rain, snowP, overlay;
 let flames = [], fireLights = [], flameMats = [], smokeMat;
+let shadowDirty = true, lastShadowDir = new THREE.Vector3(), lastShadowTarget = new THREE.Vector3(), lastShadowExt = 0;
 let lastBurnedLen = -1, lastSnow = null, flying = null, labels = {};
 const tmpV = new THREE.Vector3();
 
@@ -251,7 +252,7 @@ function outerHeight(x, z) {
   return edgeH + (ridges + 2 - edgeH) * smooth(0, 34, out) - .02;
 }
 function buildOuter() {
-  const size = 460, seg = 400;
+  const size = 460, seg = 230;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg);
   geo.rotateX(-Math.PI / 2); geo.translate(W / 2, 0, H / 2);
   const pos = geo.attributes.position, col = [];
@@ -300,7 +301,7 @@ function buildTrees() {
       spots.push({ x: px, z: pz, tile: `${x},${y}`, h: .22 + rnd() * .2, r: .07 + rnd() * .05, shade: rnd() });
     }
   }
-  const lower = new THREE.ConeGeometry(1, 1, 7), upper = new THREE.ConeGeometry(1, 1, 7), trunk = new THREE.CylinderGeometry(1, 1, 1, 5);
+  const pine = pineGeometry();
   // a band of forest just outside the map so it doesn't end at a line
   for (let i = 0; i < 26000 && spots.length < 24000; i++) {
     // dense right at the map edge, thinning out with distance
@@ -318,15 +319,15 @@ function buildTrees() {
       `#include <begin_vertex>
        #ifdef USE_INSTANCING
        float ph = instanceMatrix[3].x * .7 + instanceMatrix[3].z * .5;
-       float k = (position.y + .5);
+       float k = position.y;
        transformed.x += sin(uTime * 1.4 + ph) * uWind * k * .35;
        transformed.z += cos(uTime * 1.1 + ph) * uWind * k * .2;
        #endif`);
   };
-  const tmat = new THREE.MeshStandardMaterial({ color: "#4a3626", roughness: 1 });
   for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
   const N = spots.length;
-  trees = { lower: new THREE.InstancedMesh(lower, mat, N), upper: new THREE.InstancedMesh(upper, mat, N), trunk: new THREE.InstancedMesh(trunk, tmat, N) };
+  mat.vertexColors = true;
+  trees = { pine: new THREE.InstancedMesh(pine, mat, N) };
   Object.values(trees).forEach(m => { m.castShadow = true; m.receiveShadow = true; });
   treeMeta = spots;
   setTrees(new Set(), false);
@@ -345,21 +346,43 @@ function buildTrees() {
     }
   }
 }
+// one pine = trunk + three tiers of branches, merged into a single mesh (one draw per forest, not three)
+function pineGeometry() {
+  const parts = [], tr = (g, sx, sy, y, col) => {
+    g = g.toNonIndexed(); g.scale(sx, sy, sx); g.translate(0, y, 0);
+    const n = g.attributes.position.count, cols = new Float32Array(n * 3), c = new THREE.Color(col);
+    for (let i = 0; i < n; i++) {  // darker towards the bottom of each tier, like real branches in shade
+      const yy = g.attributes.position.getY(i), k = .72 + .28 * Math.min(1, Math.max(0, (yy - (y - sy / 2)) / sy));
+      cols[i * 3] = c.r * k; cols[i * 3 + 1] = c.g * k; cols[i * 3 + 2] = c.b * k;
+    }
+    g.setAttribute("color", new THREE.BufferAttribute(cols, 3)); g.deleteAttribute("uv"); parts.push(g);
+  };
+  tr(new THREE.CylinderGeometry(1, 1, 1, 5, 1, true), .2, .3, .12, "#5a4330");
+  tr(new THREE.ConeGeometry(1, 1, 6, 1, true), 1, .5, .42, "#ffffff");
+  tr(new THREE.ConeGeometry(1, 1, 6, 1, true), .78, .42, .64, "#ffffff");
+  tr(new THREE.ConeGeometry(1, 1, 6), .52, .36, .84, "#ffffff");
+  const out = new THREE.BufferGeometry();
+  for (const attr of ["position", "normal", "color"]) {
+    const total = parts.reduce((t, g) => t + g.attributes[attr].array.length, 0), arr = new Float32Array(total);
+    let o = 0; for (const g of parts) { arr.set(g.attributes[attr].array, o); o += g.attributes[attr].array.length; }
+    out.setAttribute(attr, new THREE.BufferAttribute(arr, 3));
+  }
+  return out;
+}
 function setTrees(burned, winter) {
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), s = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
+  const snow = new THREE.Color("#e9eef0");
   treeMeta.forEach((t, i) => {
     const y = t.y !== undefined ? t.y : heightAt(t.x, t.z), dead = burned.has(t.tile);
-    const h = dead ? t.h * .8 : t.h, r = dead ? t.r * .35 : t.r;
-    p.set(t.x, y + h * .12, t.z); s.set(r * .22, h * .3, r * .22); m.compose(p, q, s); trees.trunk.setMatrixAt(i, m);
-    p.set(t.x, y + h * .5, t.z); s.set(r, h * .62, r); m.compose(p, q, s); trees.lower.setMatrixAt(i, m);
-    p.set(t.x, y + h * .78, t.z); s.set(r * .68, h * .45, r * .68); m.compose(p, q, s); trees.upper.setMatrixAt(i, m);
+    const h = dead ? t.h * .8 : t.h, r = dead ? t.r * .3 : t.r;
+    e.set((t.shade - .5) * .12, t.shade * 6.28, (hash2(t.x, t.z) - .5) * .12); q.setFromEuler(e);  // slight lean and turn
+    p.set(t.x, y, t.z); s.set(r, h, r); m.compose(p, q, s); trees.pine.setMatrixAt(i, m);
     if (dead) c.set("#2a2420");
-    else { c.setHSL(.29 + t.shade * .06, .38 + t.shade * .2, .17 + t.shade * .09); if (winter) c.lerp(new THREE.Color("#e9eef0"), .45); }
-    trees.lower.setColorAt(i, c);
-    if (!dead && winter) c.lerp(new THREE.Color("#ffffff"), .35);
-    trees.upper.setColorAt(i, c);
+    else { c.setHSL(.29 + t.shade * .06, .36 + t.shade * .2, .16 + t.shade * .09); if (winter) c.lerp(snow, .5); }
+    trees.pine.setColorAt(i, c);
   });
-  ["lower", "upper", "trunk"].forEach(k => { trees[k].instanceMatrix.needsUpdate = true; if (trees[k].instanceColor) trees[k].instanceColor.needsUpdate = true; });
+  trees.pine.instanceMatrix.needsUpdate = true; if (trees.pine.instanceColor) trees.pine.instanceColor.needsUpdate = true;
+  shadowDirty = true;
 }
 
 function buildTower(S) {
@@ -508,7 +531,14 @@ function update(S, now) {
   }
   // shadows follow what you're looking at
   const dist = camera.position.distanceTo(controls.target), ext = Math.max(5, Math.min(48, dist * .8));
-  const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix(); }
+  const sc = sun.shadow.camera;
+  const lightDir = sun.position.clone().sub(controls.target).normalize();
+  if (lightDir.angleTo(lastShadowDir) > .004 || controls.target.distanceTo(lastShadowTarget) > ext * .15 || Math.abs(ext - lastShadowExt) > ext * .2) shadowDirty = true;
+  if (shadowDirty) {
+    sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix();
+    lastShadowDir.copy(lightDir); lastShadowTarget.copy(controls.target); lastShadowExt = ext;
+    renderer.shadowMap.needsUpdate = true; shadowDirty = false;
+  }
   treeTime.value = now / 1000; windAmp.value = Q.sway ? .08 + wx.wind_mph / 40 : 0;
   groundRock.value = S.snow ? .45 : 1;
   water.material.color.copy(S.snow ? new THREE.Color("#dce8ef") : C("#1f4a66", "#3d7396", sk.up).lerp(hor, .15));
@@ -598,7 +628,7 @@ function updateLabels(S) {
 }
 
 // ---------- quality settings ----------
-const Q = { pixelRatio: 1, shadows: 2048, density: 1, clouds: true, sway: true, fog: 1 };
+const Q = { pixelRatio: 1, shadows: 2048, density: 1, clouds: true, sway: true, fog: 1, cap: 60 };
 let resizeFn = () => {}, frames = [], menuOrbit = false;
 export function setQuality(q) {
   Object.assign(Q, q);
@@ -609,8 +639,9 @@ export function setQuality(q) {
     renderer.shadowMap.enabled = on; sun.castShadow = on;
     if (on) { sun.shadow.mapSize.set(Q.shadows, Q.shadows); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
     scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
+    shadowDirty = true;
   }
-  if (trees) { const n = Math.round(treeMeta.length * Q.density); Object.values(trees).forEach(m => m.count = n); }
+  if (trees) { const n = Math.round(treeMeta.length * Q.density); Object.values(trees).forEach(m => m.count = n); shadowDirty = true; }
 }
 export function fps() {
   if (frames.length < 2) return 0;
@@ -657,7 +688,7 @@ export function init(container) {
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.05;
   container.appendChild(renderer.domElement);
   overlay = document.createElement("div"); overlay.className = "overlay3d"; container.appendChild(overlay);
@@ -698,10 +729,18 @@ export function init(container) {
   resizeFn = resize;
   new ResizeObserver(resize).observe(container); resize();
 
+  let lastFrame = 0, lastInteract = performance.now();
+  for (const ev of ["pointerdown", "pointermove", "wheel", "keydown"]) renderer.domElement.addEventListener(ev, () => lastInteract = performance.now(), { passive: true });
+  controls.addEventListener("change", () => lastInteract = performance.now());
   const loop = now => {
     requestAnimationFrame(loop);
-    frames.push(now); while (frames.length && now - frames[0] > 1000) frames.shift();
     if (window.__mapMode !== "3d" || !window.__S) return;
+    // frame cap; slow right down when nothing is happening (paused, no input) or the window isn't focused
+    const idle = (window.__S.speed === 0 && !flying && !menuOrbit && now - lastInteract > 1500);
+    const cap = !document.hasFocus() ? Math.min(Q.cap, 20) : idle ? 12 : Q.cap;
+    if (now - lastFrame < 1000 / cap - 1) return;
+    lastFrame = now;
+    frames.push(now); while (frames.length && now - frames[0] > 1000) frames.shift();
     if (flying) {
       const k = Math.min(1, (now - flying.t0) / 900), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       controls.target.lerpVectors(flying.fromT, flying.toT, e); camera.position.lerpVectors(flying.fromP, flying.toP, e);

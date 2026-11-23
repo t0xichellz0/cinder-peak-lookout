@@ -277,6 +277,7 @@
       <div class="set-row"><span class="label">Tree density</span><input type="range" id="setDensity" min="20" max="100" step="5"></div>
       <div class="set-row"><span class="label">Render scale</span><input type="range" id="setScale" min="50" max="200" step="10"></div>
       <div class="set-row"><span class="label">View distance</span><div class="seg" id="setFog"></div></div>
+      <div class="set-row"><span class="label">Frame limit</span><div class="seg" id="setCap"></div></div>
       <div class="set-row"><span class="label">Clouds</span><div class="seg" id="setClouds"></div></div>
       <div class="set-row"><span class="label">Tree sway</span><div class="seg" id="setSway"></div></div>
       <div class="set-row"><span class="label">Show FPS</span><div class="seg" id="setFps"></div></div>
@@ -775,18 +776,20 @@ function moveInk() {
 
 // ---------- settings ----------
 const PRESETS = {
-  Low:    {shadows: 0,    density: 35,  scale: 75,  fog: "Near",   clouds: false, sway: false},
-  Medium: {shadows: 1024, density: 65,  scale: 100, fog: "Normal", clouds: true,  sway: true},
-  High:   {shadows: 2048, density: 100, scale: 125, fog: "Normal", clouds: true,  sway: true},
-  Ultra:  {shadows: 4096, density: 100, scale: 160, fog: "Far",    clouds: true,  sway: true},
+  Low:    {shadows: 0,    density: 40,  scale: 75,  fog: "Near",   clouds: false, sway: false, cap: 30},
+  Medium: {shadows: 1024, density: 70,  scale: 90,  fog: "Normal", clouds: true,  sway: true,  cap: 60},
+  High:   {shadows: 2048, density: 100, scale: 100, fog: "Normal", clouds: true,  sway: true,  cap: 60},
+  Ultra:  {shadows: 4096, density: 100, scale: 130, fog: "Far",    clouds: true,  sway: true,  cap: 120},
 };
 let SET = Object.assign({preset: "High", fps: false, pauseMenu: true}, PRESETS.High);
 try { Object.assign(SET, JSON.parse(localStorage.getItem("lookoutSettings") || "{}")); } catch (e) {}
+if (!SET.cap) { if (PRESETS[SET.preset]) Object.assign(SET, PRESETS[SET.preset]); else SET.cap = 60; }
 function saveSettings() { try { localStorage.setItem("lookoutSettings", JSON.stringify(SET)); } catch (e) {} }
 function applySettings() {
   const w3 = window.__w3; if (!w3) return;
   w3.setQuality({ pixelRatio: Math.min(2.5, (window.devicePixelRatio || 1) * SET.scale / 100), shadows: SET.shadows,
-                  density: SET.density / 100, clouds: SET.clouds, sway: SET.sway, fog: {Near: 1.6, Normal: 1, Far: .55}[SET.fog] });
+                  density: SET.density / 100, clouds: SET.clouds, sway: SET.sway, fog: {Near: 1.6, Normal: 1, Far: .55}[SET.fog],
+                  cap: SET.cap || 60 });
   $("fps").style.display = SET.fps ? "block" : "none";
 }
 function seg(id, options, get, set) {
@@ -802,6 +805,7 @@ function buildSettings() {
     Object.assign(SET, PRESETS[v], {preset: v}); buildSettings(); applySettings(); saveSettings(); });
   seg("setShadows", [[0, "Off"], [1024, "Low"], [2048, "High"], [4096, "Ultra"]], () => SET.shadows, v => { SET.shadows = +v; custom(); applySettings(); saveSettings(); });
   seg("setFog", [["Near", "Near"], ["Normal", "Normal"], ["Far", "Far"]], () => SET.fog, v => { SET.fog = v; custom(); applySettings(); saveSettings(); });
+  seg("setCap", [[30, "30"], [60, "60"], [120, "120"], [1000, "No limit"]], () => SET.cap || 60, v => { SET.cap = +v; custom(); applySettings(); saveSettings(); });
   const onoff = [["true", "On"], ["false", "Off"]];
   seg("setClouds", onoff, () => SET.clouds, v => { SET.clouds = v === "true"; custom(); applySettings(); saveSettings(); });
   seg("setSway", onoff, () => SET.sway, v => { SET.sway = v === "true"; custom(); applySettings(); saveSettings(); });
@@ -810,7 +814,7 @@ function buildSettings() {
   $("setDensity").value = SET.density; $("setScale").value = SET.scale;
   $("setDensity").oninput = e => { SET.density = +e.target.value; custom(); applySettings(); saveSettings(); };
   $("setScale").oninput = e => { SET.scale = +e.target.value; custom(); applySettings(); saveSettings(); };
-  $("setHint").textContent = window.__w3 ? "Changes apply instantly. Turn on Show FPS to see what your laptop handles: aim for 40+." :
+  $("setHint").textContent = window.__w3 ? "Changes apply instantly. A frame limit of 60 keeps your GPU cool; when the world is paused and you're not moving the view it drops to a trickle by itself." :
     "3D isn't running, so graphics settings have no effect in the 2D map.";
 }
 setInterval(() => { if (SET.fps && window.__w3) $("fps").textContent = window.__w3.fps() + " FPS"; }, 500);
