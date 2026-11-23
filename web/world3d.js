@@ -28,17 +28,25 @@ function rawElev(gx, gy) {
 }
 const tileAt = (x, z) => { const tx = Math.floor(x), ty = Math.floor(z); return (ty >= 0 && ty < H && tx >= 0 && tx < W) ? tiles[ty][tx] : " "; };
 let waterTiles = [];
+// smooth "lake field": 1 deep inside the lake, 0 far away. The shoreline is where it crosses 0.5,
+// which gives a rounded natural outline instead of the square tiles underneath.
+function lakeField(x, z) {
+  let m = 0;
+  for (const [wx, wz] of waterTiles) {
+    const dx = x - wx - .5, dz = z - wz - .5, d2 = dx * dx + dz * dz;
+    if (d2 < 16) m += Math.exp(-d2 / (2 * .62 * .62));
+  }
+  return Math.min(1.5, m);
+}
 function heightAt(x, z) {
   let h = rawElev(x - 0.5, z - 0.5) * K;
-  // flatten the land around the lake so the shore slopes gently down to the water
-  let d = 99;
-  for (const [wx, wz] of waterTiles) { const dd = Math.hypot(x - wx - .5, z - wz - .5); if (dd < d) d = dd; }
-  if (d < 5) {
-    const f = Math.max(0, Math.min(1, (d - .75) / 4.25)), ease = f * f * (3 - 2 * f);
-    const bank = waterH + .05 + (h - waterH) * ease;
-    h = d <= .75 ? waterH - .15 - (.75 - d) * .3 : Math.min(h, bank);
-  }
-  return h;
+  if (!waterTiles.length) return h;
+  const m = lakeField(x, z);
+  if (m <= 0.0005) return h;
+  const s = .5 - m;                                   // < 0 inside the lake
+  if (s < 0) return waterH - .12 - Math.min(-s, .6) * .5;   // lake bed
+  const ease = smooth(0, .48, s);                     // banks rise gently away from the water
+  return waterH + .04 + (h - waterH) * ease;
 }
 
 // ---------- ground painting ----------
@@ -145,7 +153,7 @@ function repaintGround(S) {
 
 // ---------- scene ----------
 function buildTerrain() {
-  const geo = new THREE.PlaneGeometry(W, H, W * 4, H * 4);
+  const geo = new THREE.PlaneGeometry(W, H, W * 6, H * 6);
   geo.rotateX(-Math.PI / 2); geo.translate(W / 2, 0, H / 2);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getX(i), pos.getZ(i)));
@@ -265,10 +273,17 @@ function buildOuter() {
 let outer;
 
 function buildWater() {
+  // a fine grid over the lake, keeping only cells just past the shoreline (the banks hide the rest)
   let x0 = W, x1 = 0, z0 = H, z1 = 0;
   for (const [x, y] of waterTiles) { x0 = Math.min(x0, x); x1 = Math.max(x1, x + 1); z0 = Math.min(z0, y); z1 = Math.max(z1, y + 1); }
-  const g = new THREE.PlaneGeometry(x1 - x0 + 2, z1 - z0 + 2, 1, 1);
-  g.rotateX(-Math.PI / 2); g.translate((x0 + x1) / 2, waterH, (z0 + z1) / 2);
+  const step = .1, v = [];
+  for (let z = z0 - 1.5; z < z1 + 1.5; z += step) for (let x = x0 - 1.5; x < x1 + 1.5; x += step) {
+    if (lakeField(x + step / 2, z + step / 2) < .36) continue;
+    const a = x, b = x + step, c = z, d = z + step;
+    v.push(a, waterH, c, a, waterH, d, b, waterH, c, b, waterH, c, a, waterH, d, b, waterH, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(v, 3)); g.computeVertexNormals();
   water = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: "#3d7396", transparent: true, opacity: .88, roughness: .08, metalness: .1 }));
   water.receiveShadow = true; scene.add(water);
 }
@@ -461,9 +476,15 @@ function update(S, now) {
   const sunDir = new THREE.Vector3(Math.cos(ang) * .9, Math.max(-.2, Math.sin(ang)) * .75 + .05, -.45).normalize();
   const overcast = /rain|storm|overcast|snow|blizzard|thunder/.test(wx.desc) ? 1 : /partly|cumulus|haz/.test(wx.desc) ? .35 : 0;
   sun.position.copy(controls.target).addScaledVector(sunDir, 80); sun.target.position.copy(controls.target); sun.target.updateMatrixWorld();
-  sun.intensity = (0.05 + 3.2 * sk.up) * (1 - overcast * .6);
-  sun.color = C("#ff9a55", "#fff4e2", Math.min(1, sk.up * 2.2));
-  hemi.intensity = .18 + 1.1 * sk.up * (1 - overcast * .3);
+  const nightK = 1 - Math.min(1, sk.up * 5 + sk.twilight);
+  if (nightK > .5) {  // moonlight: the "sun" light swings to a cool moon on the other side
+    sun.position.copy(controls.target).addScaledVector(new THREE.Vector3(-.5, .8, .35).normalize(), 80);
+    sun.intensity = .55 * (1 - overcast * .7); sun.color = new THREE.Color("#8fa6d8");
+  } else {
+    sun.intensity = (0.05 + 3.2 * sk.up) * (1 - overcast * .6);
+    sun.color = C("#ff9a55", "#fff4e2", Math.min(1, sk.up * 2.2));
+  }
+  hemi.intensity = .42 + 1.0 * sk.up * (1 - overcast * .3);
   hemi.color = C("#3a4a7a", "#cfe3ff", sk.up);
   const night = 1 - Math.min(1, sk.up * 4 + sk.twilight * .5);
   const top = C("#060b1c", "#3f73b5", sk.up), hor = C("#141c33", "#c4d7e8", sk.up);
@@ -585,6 +606,14 @@ export function flyTo(where) {
 }
 
 // ---------- setup ----------
+document.addEventListener("keydown", e => {
+  if (e.key !== "F11") return;
+  e.preventDefault();
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.fullscreen) window.pywebview.api.fullscreen();
+  else if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
+});
+
 export function init(container) {
   const MAP = window.__MAP; tiles = MAP.tiles; elev = MAP.elev; H = tiles.length; W = tiles[0].length;
   // water level: just below the lowest shore around the lake
@@ -594,7 +623,14 @@ export function init(container) {
   waterTiles = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (tiles[y][x] === "W") waterTiles.push([x, y]);
   let low = Infinity; for (const [x, y] of waterTiles) low = Math.min(low, elev[y][x] * K);
-  waterH = Math.min(isFinite(shore) ? shore : 0, isFinite(low) ? low + .25 : 0) - .03;
+  // water sits just below the lowest ground around the lake, so no artificial dam is needed
+  let ring = Infinity;
+  for (const [x, y] of waterTiles) for (let k = 0; k < 16; k++) for (const r of [1.6, 2.3, 3]) {
+    const px = x + .5 + Math.cos(k / 16 * 6.283) * r, pz = y + .5 + Math.sin(k / 16 * 6.283) * r;
+    if (tileAt(px, pz) !== "W") ring = Math.min(ring, rawElev(px - .5, pz - .5) * K);
+  }
+  waterH = (isFinite(low) ? low : 0) + .1;
+  if (isFinite(ring) && ring < waterH - 1.2) waterH = ring + 1.2;  // don't perch the lake far above the land below it
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
