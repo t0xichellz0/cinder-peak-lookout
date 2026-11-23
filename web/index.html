@@ -153,6 +153,47 @@
                   border-radius: 8px; padding: 6px 10px; font: 14px Georgia, serif; }
   .lbl3d.bubble.thought { background: rgba(232,222,245,.95); border-style: dashed; border-radius: 16px; }
   .maptools .sep { width: 8px; }
+
+  /* ---- smoothness ---- */
+  button, .tabs button, .subbar button, .chan button { transition: background .18s, color .18s, border-color .18s, transform .12s; }
+  button:active { transform: scale(.97); }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  @keyframes popIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+  .pane.on, #p-journal.on { animation: fadeIn .22s ease; }
+  .tabs { position: relative; }
+  .tabs button.on { border-bottom-color: transparent; }
+  .tab-ink { position: absolute; bottom: 0; height: 2px; background: var(--accent); transition: left .25s ease, width .25s ease; }
+  .popover[style*="block"] { animation: popIn .15s ease; }
+  .modal-bg[style*="flex"] .modal { animation: popIn .2s ease; }
+  .toast { transition: opacity .25s; }
+  #gl, #cv { animation: fadeIn .3s ease; }
+  .status #thought { transition: opacity .3s; }
+  .bar i { transition: width .6s ease; }
+  /* ---- menu ---- */
+  .menu { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center;
+          background: radial-gradient(ellipse at center, rgba(10,9,7,.35), rgba(10,9,7,.82)); backdrop-filter: blur(2px); }
+  .menu.open { display: flex; animation: fadeIn .3s ease; }
+  .menu.main { background: linear-gradient(90deg, rgba(10,9,7,.85) 0%, rgba(10,9,7,.35) 45%, rgba(10,9,7,0) 70%); backdrop-filter: none; justify-content: flex-start; }
+  .menu-col { width: 360px; margin-left: 7vw; }
+  .menu:not(.main) .menu-col { margin-left: 0; background: rgba(31,28,23,.92); border: 1px solid var(--line); border-radius: 12px; padding: 26px 28px; }
+  .menu h1 { font: 600 40px Georgia, serif; margin: 0; letter-spacing: .5px; color: #f2e6cc; text-shadow: 0 2px 20px rgba(0,0,0,.6); }
+  .menu .sub { color: var(--dim); margin: 6px 0 26px; font-size: 14px; }
+  .menu .mbtn { display: block; width: 100%; text-align: left; font: 18px Georgia, serif; padding: 11px 16px; margin: 0 0 8px;
+                background: rgba(42,38,32,.75); border: 1px solid var(--line); border-radius: 8px; color: var(--ink); }
+  .menu .mbtn:hover { background: rgba(224,160,69,.18); border-color: var(--accent); transform: translateX(3px); }
+  .menu .mbtn.primary { background: var(--accent); color: #1a1408; border-color: var(--accent); font-weight: 600; }
+  .menu-page { display: none; }
+  .menu-page.on { display: block; animation: fadeIn .2s ease; }
+  .menu-page h2 { font: 600 22px Georgia, serif; margin: 0 0 14px; }
+  .set-row { display: grid; grid-template-columns: 130px 1fr; gap: 10px; align-items: center; margin: 10px 0; font-size: 13px; }
+  .set-row .label { color: var(--dim); }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; border-radius: 0; background: transparent; font-size: 12px; padding: 5px 4px; }
+  .seg button.on { background: var(--accent); color: #1a1408; font-weight: 600; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .keys { font-size: 13px; } .keys td { padding: 4px 10px 4px 0; } .keys td:first-child { color: var(--accent); white-space: nowrap; font-family: ui-monospace, Consolas, monospace; }
+  .fps { position: absolute; top: 10px; right: 10px; background: rgba(20,18,14,.75); color: #cfe3a0; font: 12px ui-monospace, Consolas, monospace;
+         padding: 3px 8px; border-radius: 4px; display: none; pointer-events: none; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; height: auto; } .right { height: 80vh; } }
 </style>
 </head>
@@ -170,6 +211,7 @@
     <div class="mapwrap" id="mapwrap">
       <canvas id="cv" width="1024" height="640"></canvas>
       <div class="gl3d" id="gl"></div>
+      <div class="fps" id="fps"></div>
       <div class="maptools">
         <button id="v3d" title="3D view: scroll or pinch to zoom, drag to pan, right-drag to rotate">3D</button>
         <button id="v2d">2D</button>
@@ -200,6 +242,7 @@
       <button data-p="talk">Talk</button>
       <button data-p="journal">Journal</button>
       <button data-p="mind">Mind</button>
+      <span class="tab-ink" id="tabInk"></span>
     </div>
     <div class="subbar" id="lifeBar"><button data-m="today" class="on">Today</button><button data-m="all">All thoughts</button></div>
     <div class="pane on flush" id="p-life"></div>
@@ -216,6 +259,51 @@
     <div class="pane" id="p-mind"></div>
   </div>
 </main>
+
+<div class="menu" id="menu">
+  <div class="menu-col">
+    <div class="menu-page on" id="mp-root">
+      <h1 id="menuTitle">Cinder Peak Lookout</h1>
+      <div class="sub" id="menuSub"></div>
+      <button class="mbtn primary" id="mContinue">Continue</button>
+      <button class="mbtn" data-page="settings">Settings</button>
+      <button class="mbtn" data-page="controls">Controls</button>
+      <button class="mbtn" id="mQuit">Quit</button>
+    </div>
+    <div class="menu-page" id="mp-settings">
+      <h2>Settings</h2>
+      <div class="set-row"><span class="label">Quality preset</span><div class="seg" id="setPreset"></div></div>
+      <div class="set-row"><span class="label">Shadows</span><div class="seg" id="setShadows"></div></div>
+      <div class="set-row"><span class="label">Tree density</span><input type="range" id="setDensity" min="20" max="100" step="5"></div>
+      <div class="set-row"><span class="label">Render scale</span><input type="range" id="setScale" min="50" max="200" step="10"></div>
+      <div class="set-row"><span class="label">View distance</span><div class="seg" id="setFog"></div></div>
+      <div class="set-row"><span class="label">Clouds</span><div class="seg" id="setClouds"></div></div>
+      <div class="set-row"><span class="label">Tree sway</span><div class="seg" id="setSway"></div></div>
+      <div class="set-row"><span class="label">Show FPS</span><div class="seg" id="setFps"></div></div>
+      <div class="set-row"><span class="label">Pause in menus</span><div class="seg" id="setPause"></div></div>
+      <div class="muted" id="setHint" style="margin-top:8px"></div>
+      <button class="mbtn" data-page="root" style="margin-top:16px">Back</button>
+    </div>
+    <div class="menu-page" id="mp-controls">
+      <h2>Controls</h2>
+      <table class="keys">
+        <tr><td>Scroll / pinch</td><td>Zoom in and out</td></tr>
+        <tr><td>Left-drag</td><td>Move around the map</td></tr>
+        <tr><td>Right-drag</td><td>Rotate the view (two-finger drag on a touchpad)</td></tr>
+        <tr><td>Click the ground</td><td>Leave something there for him to find</td></tr>
+        <tr><td>Space</td><td>Pause / resume the world</td></tr>
+        <tr><td>1 – 4</td><td>Speed 1×, 5×, 20×, 60×</td></tr>
+        <tr><td>H</td><td>Fly to the tower (summit)</td></tr>
+        <tr><td>F</td><td>Fly out to the whole forest</td></tr>
+        <tr><td>G</td><td>God view on / off</td></tr>
+        <tr><td>M</td><td>Switch 3D / 2D map</td></tr>
+        <tr><td>F11</td><td>Fullscreen</td></tr>
+        <tr><td>Esc</td><td>This menu</td></tr>
+      </table>
+      <button class="mbtn" data-page="root" style="margin-top:16px">Back</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="modalBg"><div class="modal">
   <h2 id="mTitle"></h2><p id="mBody"></p><p id="mReset" class="muted"></p>
@@ -478,6 +566,8 @@ function render(ts) {
 }
 
 // ---------- panels ----------
+// only touch the page when something actually changed: no flicker, hover and scroll stay put
+function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
 const prioCol = {routine: "#6f6757", urgent: "#c7862e", emergency: "#c0392b"};
 const day = t => Math.floor(t / 1440) + 1;
 let lifeMode = "today", talkCh = "radio", journalMode = "diary";
@@ -494,7 +584,7 @@ function renderNow() {
   const trying = !tr ? "" : tr.startsWith("waiting") ? " (a model is busy, waiting)" : "";
   $("thinking").textContent = S.thinking ? S.thinking + "..." + trying : "";
   const n = a.needs, bars = [["energy", n.energy, "#8fb36a"], ["hunger", n.hunger, "#d9a04c"], ["boredom", n.boredom, "#b08fd0"], ["lonely", n.lonely, "#7fb0d0"]];
-  $("needs").innerHTML = bars.map(([l, v, c]) => `<div class="need"><label>${l}</label><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`).join("");
+  setHTML($("needs"), bars.map(([l, v, c]) => `<div class="need"><label>${l}</label><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`).join(""));
 }
 
 // Life: today's happenings and thoughts in one timeline, or every thought with search
@@ -509,7 +599,7 @@ function renderLife() {
       ...S.today.filter(x => x.kind !== "activity").map(x => ({t: x.t, html: `<div class="ev k-${x.kind}"><span class="t">${hhmm(x.t)}</span>${esc(x.text)}</div>`})),
       ...(S.thoughts_recent || []).filter(t => t.t >= since).map(t => ({t: t.t, html: thoughtHTML(t)})),
     ].sort((p, q) => q.t - p.t);
-    el.innerHTML = items.map(i => i.html).join("") || `<div class="muted">Nothing yet today.</div>`;
+    setHTML(el, items.map(i => i.html).join("") || `<div class="muted">Nothing yet today.</div>`);
     return;
   }
   const q = ($("thSearch") && $("thSearch").value || "").toLowerCase();
@@ -547,7 +637,7 @@ function renderTalk() {
     : `<div class="msg inner"><div class="who">${esc(name)}, in his head · D${day(v.t)} ${hhmm(v.t)}</div>${esc(v.text)}</div>`});
   items.sort((p, q) => p.t - q.t);
   const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? "He's asleep; he'll hear the voice in a dream." : "He's hearing it..."}</div>` : "";
-  el.innerHTML = (items.map(i => i.html).join("") || `<div class="muted">Nothing said yet. Use Radio to talk as dispatch, or Voice to speak inside his head.</div>`) + pend;
+  setHTML(el, (items.map(i => i.html).join("") || `<div class="muted">Nothing said yet. Use Radio to talk as dispatch, or Voice to speak inside his head.</div>`) + pend);
   const len = S.radio.length + S.voice.length;
   if (stick || lastTalkLen !== len) el.scrollTop = el.scrollHeight;
   lastTalkLen = len;
@@ -568,14 +658,14 @@ function renderJournal() {
   const el = $("journalBody");
   if (journalMode === "log") {
     el.className = "log"; el.style.overflowY = "auto";
-    el.innerHTML = S.log.slice().reverse().map(x => `<div>D${day(x.t)} ${hhmm(x.t)}  ${esc(x.text)}</div>`).join("");
+    setHTML(el, S.log.slice().reverse().map(x => `<div>D${day(x.t)} ${hhmm(x.t)}  ${esc(x.text)}</div>`).join(""));
     return;
   }
   el.className = "diary"; el.style.overflowY = "";
   const d = diary[diarySel];
-  el.innerHTML = `<div class="days">${diary.map((e, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${e.day + 1}<br>${esc(e.date)}${e.year ? ", Y" + e.year : ""}</div>`).reverse().join("")}</div>` +
+  setHTML(el, `<div class="days">${diary.map((e, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${e.day + 1}<br>${esc(e.date)}${e.year ? ", Y" + e.year : ""}</div>`).reverse().join("")}</div>` +
     `<div class="page">${d ? `<h3>Day ${d.day + 1} · ${esc(d.date)}${d.year ? ", Year " + d.year : ""}</h3>${esc(d.text)}${d.tomorrow ? `<div class="tmr">Tomorrow: ${esc(d.tomorrow)}</div>` : ""}`
-                         : `<span class="muted">No entries yet. He writes before bed.</span>`}</div>`;
+                         : `<span class="muted">No entries yet. He writes before bed.</span>`}</div>`);
 }
 window.pickDay = i => { diarySel = i; renderJournal(); };
 
@@ -589,14 +679,14 @@ function renderMind() {
   }).join("") || `<div class="muted">No opinions yet. They form from what happens to him.</div>`;
   const list = (arr, f, empty) => arr.length ? `<ul class="plain">${arr.map(f).join("")}</ul>` : `<div class="muted">${empty}</div>`;
   const fx = S.fixables || [];
-  $("p-mind").innerHTML =
+  setHTML($("p-mind"),
     `<h4>Likes and dislikes</h4>${feel}` +
     `<h4>What he's concluded</h4>${list(S.beliefs, b => `<li>${esc(b)}</li>`, "Nothing concluded yet.")}` +
     `<h4>Facts about his life</h4>${list(S.self_facts || [], f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`, "Nothing established yet. Ask him about his past.")}` +
     `<h4>Side projects</h4>${list(S.projects, p => `<li><b>${esc(p.name)}</b> <span class="muted">${p.status}, ${p.sessions} sessions</span><br>${esc(p.notes[p.notes.length - 1] || "")}</li>`, "No side projects yet.")}` +
     `<h4>Repairs</h4>${list(fx, f => `<li>${esc(f.name)} <span class="muted">${f.broken ? (f.times_fixed ? "broken again" : "broken") + (f.attempts ? `, ${f.attempts} failed tr${f.attempts > 1 ? "ies" : "y"}` : "") : "fixed on day " + (f.fixed_day + 1)}</span></li>`, "Nothing noticed yet.")}` +
     `<h4>His things</h4>${list(S.inventory, i => `<li>${esc(i)}</li>`, "")}` +
-    `<h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot: ${S.stats.offline_calls} · today: ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none"}</div>`;
+    `<h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot: ${S.stats.offline_calls} · today: ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none"}</div>`);
 }
 
 const ICON = d => /blizzard|snow/.test(d) ? "❄" : /thunder/.test(d) ? "⛈" : /rain/.test(d) ? "🌧" : /fog|haz/.test(d) ? "🌫" : /overcast/.test(d) ? "☁" : /partly|cumulus/.test(d) ? "⛅" : "☀";
@@ -605,10 +695,10 @@ function renderHeader() {
   $("clock").textContent = `Day ${S.day} · ${S.date} · ${S.time}`;
   const w = S.wx, dir = ["N","NE","E","SE","S","SW","W","NW"][Math.round(w.wind_from / 45) % 8];
   const dc = {Low: "#3d6b3a", Moderate: "#2f5f80", High: "#a17a1e", "Very High": "#b4521f", Extreme: "#a3241a"}[w.danger];
-  $("wx").innerHTML = `<span title="${esc(w.desc)}, humidity ${w.rh}%, ${esc(S.season)}">${ICON(w.desc)} ${w.temp}°F · ${dir} ${w.wind_mph} mph</span>` +
-    (dc ? `<span class="chip" style="background:${dc}" title="Fire danger">${esc(w.danger)}</span>` : "");
-  $("speeds").innerHTML = [[0, "⏸"], [1, "1×"], [5, "5×"], [20, "20×"], [60, "60×"]].map(([v, l]) =>
-    `<button class="${S.speed == v ? "on" : ""}" onclick="speed(${v})" title="${v ? v + " sim-minutes per second" : "pause"}">${l}</button>`).join("");
+  setHTML($("wx"), `<span title="${esc(w.desc)}, humidity ${w.rh}%, ${esc(S.season)}">${ICON(w.desc)} ${w.temp}°F · ${dir} ${w.wind_mph} mph</span>` +
+    (dc ? `<span class="chip" style="background:${dc}" title="Fire danger">${esc(w.danger)}</span>` : ""));
+  setHTML($("speeds"), [[0, "⏸"], [1, "1×"], [5, "5×"], [20, "20×"], [60, "60×"]].map(([v, l]) =>
+    `<button class="${S.speed == v ? "on" : ""}" onclick="speed(${v})" title="${v ? v + " sim-minutes per second" : "pause"}">${l}</button>`).join(""));
   const b = S.brain;
   const st = b.chain.length === 0 ? ["No brain", "#6f6757"] : b.tier === "autopilot" ? ["Brain dead", "#d9634c"] :
     b.tier === "backup" ? (b.main_out ? ["Backup brain", "#e0a045"] : ["Backup (briefly)", "#c9b45a"]) : b.tier === "full" ? ["Full brain", "#8fb36a"] : ["Waking up", "#6f6757"];
@@ -676,6 +766,102 @@ async function poll() {
   } catch (e) { $("thinking").textContent = "Lost contact with the lookout. Is the black window still open?"; }
 }
 
+
+// ---------- tab underline ----------
+function moveInk() {
+  const on = document.querySelector("#tabs button.on"), ink = $("tabInk"); if (!on || !ink) return;
+  ink.style.left = on.offsetLeft + "px"; ink.style.width = on.offsetWidth + "px";
+}
+
+// ---------- settings ----------
+const PRESETS = {
+  Low:    {shadows: 0,    density: 35,  scale: 75,  fog: "Near",   clouds: false, sway: false},
+  Medium: {shadows: 1024, density: 65,  scale: 100, fog: "Normal", clouds: true,  sway: true},
+  High:   {shadows: 2048, density: 100, scale: 125, fog: "Normal", clouds: true,  sway: true},
+  Ultra:  {shadows: 4096, density: 100, scale: 160, fog: "Far",    clouds: true,  sway: true},
+};
+let SET = Object.assign({preset: "High", fps: false, pauseMenu: true}, PRESETS.High);
+try { Object.assign(SET, JSON.parse(localStorage.getItem("lookoutSettings") || "{}")); } catch (e) {}
+function saveSettings() { try { localStorage.setItem("lookoutSettings", JSON.stringify(SET)); } catch (e) {} }
+function applySettings() {
+  const w3 = window.__w3; if (!w3) return;
+  w3.setQuality({ pixelRatio: Math.min(2.5, (window.devicePixelRatio || 1) * SET.scale / 100), shadows: SET.shadows,
+                  density: SET.density / 100, clouds: SET.clouds, sway: SET.sway, fog: {Near: 1.6, Normal: 1, Far: .55}[SET.fog] });
+  $("fps").style.display = SET.fps ? "block" : "none";
+}
+function seg(id, options, get, set) {
+  const el = $(id);
+  el.innerHTML = options.map(([v, l]) => `<button data-v="${v}">${l}</button>`).join("");
+  const sync = () => el.querySelectorAll("button").forEach(b => b.classList.toggle("on", String(get()) === b.dataset.v));
+  el.onclick = e => { const v = e.target.dataset.v; if (v === undefined) return; set(v); sync(); };
+  el._sync = sync; sync();
+}
+function custom() { SET.preset = "Custom"; $("setPreset")._sync(); }
+function buildSettings() {
+  seg("setPreset", ["Low", "Medium", "High", "Ultra"].map(p => [p, p]), () => SET.preset, v => {
+    Object.assign(SET, PRESETS[v], {preset: v}); buildSettings(); applySettings(); saveSettings(); });
+  seg("setShadows", [[0, "Off"], [1024, "Low"], [2048, "High"], [4096, "Ultra"]], () => SET.shadows, v => { SET.shadows = +v; custom(); applySettings(); saveSettings(); });
+  seg("setFog", [["Near", "Near"], ["Normal", "Normal"], ["Far", "Far"]], () => SET.fog, v => { SET.fog = v; custom(); applySettings(); saveSettings(); });
+  const onoff = [["true", "On"], ["false", "Off"]];
+  seg("setClouds", onoff, () => SET.clouds, v => { SET.clouds = v === "true"; custom(); applySettings(); saveSettings(); });
+  seg("setSway", onoff, () => SET.sway, v => { SET.sway = v === "true"; custom(); applySettings(); saveSettings(); });
+  seg("setFps", onoff, () => SET.fps, v => { SET.fps = v === "true"; applySettings(); saveSettings(); });
+  seg("setPause", onoff, () => SET.pauseMenu, v => { SET.pauseMenu = v === "true"; saveSettings(); });
+  $("setDensity").value = SET.density; $("setScale").value = SET.scale;
+  $("setDensity").oninput = e => { SET.density = +e.target.value; custom(); applySettings(); saveSettings(); };
+  $("setScale").oninput = e => { SET.scale = +e.target.value; custom(); applySettings(); saveSettings(); };
+  $("setHint").textContent = window.__w3 ? "Changes apply instantly. Turn on Show FPS to see what your laptop handles: aim for 40+." :
+    "3D isn't running, so graphics settings have no effect in the 2D map.";
+}
+setInterval(() => { if (SET.fps && window.__w3) $("fps").textContent = window.__w3.fps() + " FPS"; }, 500);
+
+// ---------- menu ----------
+let menuSpeed = null;
+function openMenu(kind) {
+  const m = $("menu"); if (m.classList.contains("open")) return;
+  m.classList.toggle("main", kind === "main"); m.classList.add("open");
+  showPage("root");
+  $("menuTitle").textContent = kind === "main" ? (S ? S.place.lookout : "Lookout") : "Paused";
+  $("mContinue").textContent = kind === "main" ? "Continue" : "Resume";
+  $("menuSub").textContent = S ? `${S.character.name} · Day ${S.day}, ${S.date}, Year ${S.year}` : "";
+  $("mQuit").style.display = window.pywebview ? "" : "none";
+  if (SET.pauseMenu && S && S.speed > 0) { menuSpeed = S.speed; speed(0); }
+  if (kind === "main" && window.__w3 && window.__mapMode === "3d") window.__w3.setMenu(true);
+}
+function closeMenu() {
+  $("menu").classList.remove("open");
+  if (window.__w3) window.__w3.setMenu(false);
+  if (menuSpeed !== null) { speed(menuSpeed); menuSpeed = null; }
+}
+function showPage(p) {
+  document.querySelectorAll(".menu-page").forEach(el => el.classList.toggle("on", el.id === "mp-" + p));
+  if (p === "settings") buildSettings();
+}
+$("menu").addEventListener("click", e => { const p = e.target.dataset.page; if (p) showPage(p); });
+$("mContinue").onclick = closeMenu;
+$("mQuit").onclick = () => { if (window.pywebview && window.pywebview.api.quit) window.pywebview.api.quit(); };
+
+// ---------- keyboard ----------
+window.addEventListener("keydown", e => {
+  const typing = document.activeElement && ["INPUT", "TEXTAREA"].includes(document.activeElement.tagName);
+  if (e.key === "Escape") {
+    if (typing) { document.activeElement.blur(); return; }
+    if ($("plant").style.display === "block") { $("plantX").click(); return; }
+    if ($("modalBg").style.display === "flex") { closeModal(); return; }
+    if ($("menu").classList.contains("open")) { if (!$("mp-root").classList.contains("on")) showPage("root"); else closeMenu(); }
+    else openMenu("pause");
+    return;
+  }
+  if (typing || $("menu").classList.contains("open")) return;
+  const k = e.key.toLowerCase();
+  if (k === " ") { e.preventDefault(); if (S.speed > 0) { menuSpeed = null; window.__lastSpeed = S.speed; speed(0); } else speed(window.__lastSpeed || 1); }
+  else if ("1234".includes(k) && k.length === 1) speed([1, 5, 20, 60][+k - 1]);
+  else if (k === "h") setView("summit");
+  else if (k === "f") setView("forest");
+  else if (k === "g") $("vGod").click();
+  else if (k === "m") setMode(window.__mapMode === "3d" ? "2d" : "3d");
+});
+
 // ---------- UI wiring ----------
 $("tabs").onclick = e => {
   const p = e.target.dataset.p; if (!p) return; tab = p;
@@ -683,8 +869,10 @@ $("tabs").onclick = e => {
   document.querySelectorAll(".pane").forEach(el => el.classList.toggle("on", el.id === "p-" + p));
   $("talkIn").style.display = p === "talk" ? "flex" : "none";
   $("lifeBar").style.display = p === "life" ? "flex" : "none";
+  moveInk();
   if (p === "journal") loadDiary(); else poll();
 };
+window.addEventListener("resize", moveInk);
 $("lifeBar").onclick = e => { const m = e.target.dataset.m; if (!m) return; lifeMode = m;
   $("lifeBar").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
   if (m === "all") loadThoughts(); else renderLife(); };
@@ -752,11 +940,13 @@ $("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); 
   let pref = "3d"; try { pref = localStorage.getItem("lookoutMapMode") || "3d"; } catch (e) {}
   try {
     const w3 = await import("./world3d.js");
-    w3.init($("gl")); window.__fly = w3.flyTo;
-    setMode(pref);
+    w3.init($("gl")); window.__fly = w3.flyTo; window.__w3 = w3;
+    setMode(pref); applySettings();
   } catch (err) {
     console.error("3D view unavailable:", err); setMode("2d"); $("v3d").style.display = "none";
   }
+  moveInk();
+  openMenu("main");
   setInterval(poll, 800);
   requestAnimationFrame(render);
 })();

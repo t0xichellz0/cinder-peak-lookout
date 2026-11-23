@@ -150,6 +150,11 @@ def main():
                     if WIN:
                         WIN[0].toggle_fullscreen()
                     return True
+
+                def quit(self):
+                    if WIN:
+                        WIN[0].destroy()
+                    return True
             WIN.append(webview.create_window(title, url, width=1600, height=950, min_size=(1100, 700),
                                              background_color="#15130f", js_api=Api()))
             webview.start(private_mode=False, storage_path=os.path.join(HERE, "save", "webview"))

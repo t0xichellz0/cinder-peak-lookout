@@ -324,6 +324,7 @@ function buildTrees() {
        #endif`);
   };
   const tmat = new THREE.MeshStandardMaterial({ color: "#4a3626", roughness: 1 });
+  for (let i = spots.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [spots[i], spots[j]] = [spots[j], spots[i]]; }
   const N = spots.length;
   trees = { lower: new THREE.InstancedMesh(lower, mat, N), upper: new THREE.InstancedMesh(upper, mat, N), trunk: new THREE.InstancedMesh(trunk, tmat, N) };
   Object.values(trees).forEach(m => { m.castShadow = true; m.receiveShadow = true; });
@@ -495,8 +496,9 @@ function update(S, now) {
   skyDome.position.copy(camera.position);
   stars.material.opacity = night * (1 - overcast);
   scene.fog.color.copy(hor);
-  scene.fog.density = wx.fog ? .05 : wx.raining || wx.snowing ? .022 : .0105;
+  scene.fog.density = (wx.fog ? .05 : wx.raining || wx.snowing ? .022 : .0105) * Q.fog;
   for (const c of clouds) {
+    c.visible = Q.clouds;
     c.material.opacity = (.35 + overcast * .6) * (1 - night * .6);
     c.material.color.copy(C("#2a3048", "#ffffff", sk.up)).lerp(new THREE.Color("#ffb38a"), sk.twilight * .5);
     c.position.x += Math.sin((wx.wind_from + 180) * Math.PI / 180) * .01 * (1 + wx.wind_mph / 10);
@@ -507,7 +509,7 @@ function update(S, now) {
   // shadows follow what you're looking at
   const dist = camera.position.distanceTo(controls.target), ext = Math.max(5, Math.min(48, dist * .8));
   const sc = sun.shadow.camera; if (sc.right !== ext) { sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.updateProjectionMatrix(); }
-  treeTime.value = now / 1000; windAmp.value = .08 + wx.wind_mph / 40;
+  treeTime.value = now / 1000; windAmp.value = Q.sway ? .08 + wx.wind_mph / 40 : 0;
   groundRock.value = S.snow ? .45 : 1;
   water.material.color.copy(S.snow ? new THREE.Color("#dce8ef") : C("#1f4a66", "#3d7396", sk.up).lerp(hor, .15));
   const dark = sk.up < .08;
@@ -595,6 +597,35 @@ function updateLabels(S) {
   Object.entries(labels).forEach(([k, el]) => { if (!el._seen) { el.remove(); delete labels[k]; } });
 }
 
+// ---------- quality settings ----------
+const Q = { pixelRatio: 1, shadows: 2048, density: 1, clouds: true, sway: true, fog: 1 };
+let resizeFn = () => {}, frames = [], menuOrbit = false;
+export function setQuality(q) {
+  Object.assign(Q, q);
+  if (!renderer) return;
+  renderer.setPixelRatio(Q.pixelRatio); resizeFn();
+  const on = Q.shadows > 0;
+  if (renderer.shadowMap.enabled !== on || (on && sun.shadow.mapSize.x !== Q.shadows)) {
+    renderer.shadowMap.enabled = on; sun.castShadow = on;
+    if (on) { sun.shadow.mapSize.set(Q.shadows, Q.shadows); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+    scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
+  }
+  if (trees) { const n = Math.round(treeMeta.length * Q.density); Object.values(trees).forEach(m => m.count = n); }
+}
+export function fps() {
+  if (frames.length < 2) return 0;
+  return Math.round((frames.length - 1) * 1000 / (frames[frames.length - 1] - frames[0]));
+}
+export function setMenu(on) {
+  menuOrbit = on; controls.autoRotate = on; controls.autoRotateSpeed = .35;
+  if (on) {
+    const [tx, ty] = window.__MAP.tower;
+    const target = new THREE.Vector3(tx + .5, heightAt(tx + .5, ty + .5), ty + .5);
+    flying = { t0: performance.now(), fromT: controls.target.clone(), fromP: camera.position.clone(), toT: target,
+               toP: target.clone().add(new THREE.Vector3(14, 7, 16)) };
+  }
+}
+
 // ---------- camera ----------
 function groundY(x, z) { return (x >= 0 && x <= W && z >= 0 && z <= H) ? heightAt(x, z) : outerHeight(x, z); }
 export function flyTo(where) {
@@ -663,11 +694,13 @@ export function init(container) {
     const hit = ray.intersectObject(ground)[0];
     if (hit && window.__openPlant) window.__openPlant(Math.floor(hit.point.x), Math.floor(hit.point.z), e.clientX, e.clientY);
   });
-  const resize = () => { const w = container.clientWidth, h = container.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  const resize = () => { const w = container.clientWidth, h = container.clientHeight; if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+  resizeFn = resize;
   new ResizeObserver(resize).observe(container); resize();
 
   const loop = now => {
     requestAnimationFrame(loop);
+    frames.push(now); while (frames.length && now - frames[0] > 1000) frames.shift();
     if (window.__mapMode !== "3d" || !window.__S) return;
     if (flying) {
       const k = Math.min(1, (now - flying.t0) / 900), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
