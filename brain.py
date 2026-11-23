@@ -185,20 +185,26 @@ class Brain:
         self.status["fails"] += 1
         low = msg.lower()
         flat = low.replace(" ", "").replace("_", "")
-        if "404" in msg or "not_found" in low or "no longer available" in low:
+        # The HTTP status is at the start ("429 RESOURCE_EXHAUSTED ...", "HTTP Error 404: ...").
+        # Never search the whole text for "404": a retry delay like "40.4043s" contains it,
+        # and that used to mark a perfectly good model as dead for the rest of the session.
+        m = re.match(r"\s*(?:HTTP Error\s*)?(\d{3})\b", msg)
+        code = int(m.group(1)) if m else None
+        if code == 404 or "not_found" in low or "no longer available" in low:
             self.dead.add(name)
-        elif "429" in msg or "resource_exhausted" in low or "quota" in low:
+        elif code == 429 or "resource_exhausted" in low:
             if "perday" in flat or "daily" in flat:
                 until = self.next_reset()
                 self.cool[name] = until
                 self.status["reset_at"] = until
-            else:
-                self.cool[name] = time.time() + 65  # per-minute limit: back in about a minute
-        elif "503" in msg or "unavailable" in low or "overloaded" in low:
-            self.cool[name] = time.time() + 600
-        elif "timed out" in low or "timeout" in low:
+            else:  # per-minute limit: Google says how long to wait
+                d = re.search(r"retry in ([\d.]+)s", msg) or re.search(r"retryDelay['\"]?:\s*['\"]?(\d+)", msg)
+                self.cool[name] = time.time() + min(120, (float(d.group(1)) if d else 60) + 3)
+        elif code in (500, 502, 503, 504) or "unavailable" in low or "overloaded" in low:
             self.cool[name] = time.time() + 120
-        elif "401" in msg or "403" in msg or "api key" in low or "permission" in low:
+        elif "timed out" in low or "timeout" in low:
+            self.cool[name] = time.time() + 90
+        elif code in (401, 403) or "api key not valid" in low or "permission_denied" in low:
             self.dead.add(name)
         elif "not valid json" in low:
             self.cool[name] = time.time() + 5
@@ -218,7 +224,11 @@ class Brain:
         if prov == "gemini":
             t = self.types
             if model.startswith("gemma"):  # Gemma: no system prompt or JSON mode, so fold them into the message
-                conf = t.GenerateContentConfig(temperature=temp)
+                # big open models answer slower: give them more time before calling it a timeout
+                try:
+                    conf = t.GenerateContentConfig(temperature=temp, http_options=t.HttpOptions(timeout=90_000))
+                except Exception:  # older library without per-request options
+                    conf = t.GenerateContentConfig(temperature=temp)
                 contents = system + "\n\n" + user + "\n\nReply with the JSON object only, no other text."
                 r = self.gclient.models.generate_content(model=model, contents=contents, config=conf)
                 return r.text
