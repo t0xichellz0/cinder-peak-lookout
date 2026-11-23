@@ -544,15 +544,17 @@ function update(S, now) {
   water.material.color.copy(S.snow ? new THREE.Color("#dce8ef") : C("#1f4a66", "#3d7396", sk.up).lerp(hor, .15));
   const dark = sk.up < .08;
   cabWin.material.emissive.set(dark && (!S.agent.asleep || S.thinking) ? "#ffcc66" : "#000000");
-  // Julian
+  // Julian: the sim moves him on a flat map; here that's turned into a believable 3D path
   const a = S.agent, pos = window.__spritePos ? window.__spritePos() : a.pos;
   julian.visible = !a.asleep;
   if (julian.visible) {
-    const [tx, ty] = window.__MAP.tower, dTower = Math.hypot(pos[0] - (tx + .5), pos[1] - (ty + .4));
-    const inTower = dTower < .55 && (a.loc === "tower_cab" || a.loc === "catwalk");
-    julian.position.set(pos[0], inTower ? tower.position.y + .435 : heightAt(pos[0], pos[1]), pos[1]);
-    julian.userData.legs.scale.y = a.travel_from ? (1 + Math.sin(now / 120) * .25) : 1;
-    if (window.__spritePrevPos) { const pp = window.__spritePrevPos(); const dx = pos[0] - pp[0], dz = pos[1] - pp[1]; if (Math.hypot(dx, dz) > 1e-4) julian.rotation.y = Math.atan2(dx, dz); }
+    const p3 = julianPosition(S, a, pos, now);
+    const prev = julian.position.clone();
+    julian.position.copy(p3);
+    const dx = p3.x - prev.x, dz = p3.z - prev.z;
+    if (Math.hypot(dx, dz) > .0008) julian.rotation.y = Math.atan2(dx, dz);
+    const climbing = Math.abs(p3.y - prev.y) > .0008 && Math.hypot(dx, dz) < .002;
+    julian.userData.legs.scale.y = a.travel_from || climbing ? (1 + Math.sin(now / 110) * .25) : 1;
   }
   // fires: flames + smoke + glow (pooled objects; nothing is created per frame)
   let fi = 0, li = 0;
@@ -591,6 +593,49 @@ function update(S, now) {
     for (let i = 0; i < p.count; i++) { let y = p.getY(i) - speed; if (y < -2) y = 10; p.setY(i, y); if (speed < .1) p.setX(i, p.getX(i) + Math.sin(now / 900 + i) * .003); }
     p.needsUpdate = true;
   }
+}
+
+// where a stop is in 3D: up in the cab, out on the deck, or on the ground
+const ELEVATED = { tower_cab: "cab", catwalk: "deck" };
+function stop3D(S, loc, p2) {
+  const [tx, ty] = window.__MAP.tower, cx = tx + .5, cz = ty + .5, deckY = tower.position.y + .435;
+  if (loc === "tower_cab") return new THREE.Vector3(cx + .03, deckY, cz + .02);
+  if (loc === "catwalk") {
+    const c = S.locs.catwalk, d = Math.hypot(c[0] - cx, c[1] - cz) || 1;
+    return new THREE.Vector3(cx + (c[0] - cx) / d * .17, deckY, cz + (c[1] - cz) / d * .17);
+  }
+  return new THREE.Vector3(p2[0], heightAt(p2[0], p2[1]), p2[1]);
+}
+function nearestLoc(S, p2) {
+  let best = null, bd = 1e9;
+  for (const [k, v] of Object.entries(S.locs)) { const d = Math.hypot(v[0] - p2[0], v[1] - p2[1]); if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+function julianPosition(S, a, pos, now) {
+  const target = S.locs[a.loc];
+  if (!a.travel_from || !target) return stop3D(S, a.loc, pos);
+  const from = a.travel_from, fromLoc = nearestLoc(S, from);
+  const total = Math.hypot(target[0] - from[0], target[1] - from[1]) || 1;
+  const f = Math.min(1, Math.max(0, 1 - Math.hypot(target[0] - pos[0], target[1] - pos[1]) / total));
+  const A = stop3D(S, fromLoc, from), B = stop3D(S, a.loc, target);
+  const upA = !!ELEVATED[fromLoc], upB = !!ELEVATED[a.loc];
+  if (upA === upB) {  // same level: walk straight (on the ground, follow the terrain)
+    const v = A.clone().lerp(B, f);
+    if (!upA) v.y = heightAt(v.x, v.z);
+    return v;
+  }
+  // going down or up the tower: climb at the tower's foot, walk the rest
+  const [tx, ty] = window.__MAP.tower, cx = tx + .5, cz = ty + .5;
+  const ground = upA ? B : A, dir = new THREE.Vector2(ground.x - cx, ground.z - cz).normalize();
+  const foot = new THREE.Vector3(cx + dir.x * .26, 0, cz + dir.y * .26); foot.y = heightAt(foot.x, foot.z);
+  const top = (upA ? A : B).clone();
+  const climb = .35;  // share of the trip spent on the stairs
+  if (upA) {  // top -> foot -> ground spot
+    if (f < climb) return top.clone().lerp(foot, f / climb);
+    const v = foot.clone().lerp(B, (f - climb) / (1 - climb)); v.y = heightAt(v.x, v.z); return v;
+  }
+  if (f < 1 - climb) { const v = A.clone().lerp(foot, f / (1 - climb)); v.y = heightAt(v.x, v.z); return v; }
+  return foot.clone().lerp(top, (f - (1 - climb)) / climb);
 }
 
 // ---------- labels (HTML on top of the canvas) ----------
