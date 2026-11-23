@@ -76,7 +76,7 @@
   .msg .acts button { font-size: 12px; padding: 3px 8px; }
   .prio { font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; }
   .radio-in { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); }
-  .radio-in input { flex: 1; }
+  .radio-in input { flex: 1; min-width: 0; }
   .diary { display: grid; grid-template-columns: 110px 1fr; gap: 10px; height: 100%; }
   .days { overflow-y: auto; border-right: 1px solid var(--line); padding-right: 6px; }
   .days div { padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--dim); }
@@ -103,69 +103,100 @@
   .tier { font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 600; }
   .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #2f4a2c; color: #e9f2de; padding: 10px 16px;
            border-radius: 6px; display: none; z-index: 11; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+
+  /* ---- decluttered layout ---- */
+  header { flex-wrap: nowrap; gap: 14px; padding: 8px 16px; }
+  .hl { display: flex; align-items: baseline; gap: 12px; white-space: nowrap; }
+  .wx { white-space: nowrap; font-size: 13px; }
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; font-weight: 600; margin-left: 6px; }
+  .brainbtn { display: flex; align-items: center; gap: 7px; background: transparent; border: 1px solid var(--line); color: var(--dim); font-size: 12px; white-space: nowrap; }
+  .dot { width: 10px; height: 10px; }
+  main { height: calc(100vh - 48px); }
+  .maptools button { padding: 3px 9px; font-size: 12px; }
+  .popover { position: absolute; display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+             width: 300px; box-shadow: 0 10px 30px rgba(0,0,0,.6); z-index: 5; }
+  .popover .info { font-size: 12px; color: var(--dim); margin-bottom: 6px; }
+  .popover input { width: 100%; margin-bottom: 6px; }
+  .popover .row { display: flex; gap: 6px; justify-content: flex-end; }
+  .status { display: flex; gap: 18px; align-items: center; padding: 10px 14px; }
+  .status .stext { flex: 1; min-width: 0; }
+  .status #nowTitle { font: 600 15px Georgia, serif; }
+  .status #nowSub { color: var(--faint); font-size: 12px; }
+  .status #thought { font: italic 14px Georgia, serif; color: #d8cdb4; margin-top: 3px; }
+  .status #thinking { color: var(--accent); font-size: 12px; }
+  .status .needs { display: grid; grid-template-columns: 70px 90px; gap: 4px 8px; margin: 0; flex: none; }
+  .status .need { display: contents; }
+  .status .need label { font-size: 10px; color: var(--faint); align-self: center; }
+  .status .bar { margin: 0; align-self: center; height: 5px; }
+  .subbar { display: flex; gap: 4px; padding: 8px 14px 0; }
+  .subbar button { font-size: 12px; padding: 3px 10px; border-radius: 12px; background: transparent; }
+  .subbar button.on { background: var(--panel2); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .ev { font-size: 13px; color: var(--dim); padding: 4px 0 4px 10px; border-left: 2px solid #3a342b; margin: 4px 0; }
+  .ev .t { color: var(--faint); font: 11px ui-monospace, Consolas, monospace; margin-right: 6px; }
+  .ev.k-sighting { color: #f0c36a; border-color: #8a6d2a; } .ev.k-event { color: #e8b0e0; border-color: #6d4a66; }
+  .ev.k-radio { color: var(--blue); border-color: #3e5d70; } .ev.k-voice { color: #c9a8e8; border-color: #5a4a72; }
+  .ev.k-project { color: var(--green); border-color: #4b6136; } .ev.k-weather { color: #a9c6e8; }
+  .chan { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: none; }
+  .chan button { border: 0; border-radius: 0; font-size: 12px; padding: 4px 9px; background: transparent; }
+  .chan button.on { background: var(--accent); color: #1a1408; }
+  #p-journal { display: none; flex-direction: column; } #p-journal.on { display: flex; }
+  #journalBody { flex: 1; min-height: 0; margin-top: 10px; }
+  .pane.flush { padding-top: 6px; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; height: auto; } .right { height: 80vh; } }
 </style>
 </head>
 <body>
 <header>
-  <h1 id="title">Lookout</h1>
-  <span class="clock" id="clock">--</span>
+  <div class="hl"><h1 id="title">Lookout</h1><span class="clock" id="clock">--</span></div>
   <span class="wx" id="wx"></span>
-  <span class="danger" id="danger"></span>
   <span class="spacer"></span>
   <div class="btns" id="speeds"></div>
-  <span class="tier" id="tierBadge" style="display:none"></span>
-  <div class="brain"><span class="dot" id="bdot"></span><span id="btext">brain: --</span></div>
+  <button class="brainbtn" id="brainBtn" title="Click for details"><span class="dot" id="bdot"></span><span id="btext">--</span></button>
 </header>
 <main>
   <div class="left">
-    <div class="mapwrap">
+    <div class="mapwrap" id="mapwrap">
       <canvas id="cv" width="1024" height="640"></canvas>
       <div class="maptools">
         <button id="vForest" class="on">Forest</button>
         <button id="vSummit">Summit</button>
-        <button id="vGod" title="Show everything happening, including what he hasn't noticed">God view</button>
+        <button id="vGod" title="See everything happening, including what he hasn't noticed">God view</button>
       </div>
-      <div class="legend" id="legend">Click the map to leave something for him to find.</div>
+      <div class="popover" id="plant">
+        <div class="info" id="plantInfo"></div>
+        <input type="text" id="plantText" placeholder="Leave something here for him to find...">
+        <div class="row"><button id="plantX">Cancel</button><button id="plantBtn" class="on">Leave it</button></div>
+      </div>
     </div>
-    <div class="card plant" id="plant">
-      <span id="plantInfo"></span>
-      <input type="text" id="plantText" placeholder="Leave something here (e.g. a red scarf tied to a branch)">
-      <button id="plantBtn">Leave it</button>
-      <button id="plantX">Cancel</button>
-    </div>
-    <div class="card">
-      <div class="now-title" id="nowTitle">--</div>
-      <div class="now-sub" id="nowSub"></div>
-      <div class="thought" id="thought"></div>
-      <div class="thinking" id="thinking"></div>
+    <div class="card status">
+      <div class="stext">
+        <div id="nowTitle">--</div>
+        <div id="nowSub"></div>
+        <div id="thought"></div>
+        <div id="thinking"></div>
+      </div>
       <div class="needs" id="needs"></div>
     </div>
   </div>
   <div class="right">
     <div class="tabs" id="tabs">
-      <button data-p="today" class="on">Today</button>
-      <button data-p="radio">Radio</button>
-      <button data-p="voice">Voice</button>
-      <button data-p="thoughts">Thoughts</button>
-      <button data-p="diary">Diary</button>
-      <button data-p="log">Logbook</button>
+      <button data-p="life" class="on">Life</button>
+      <button data-p="talk">Talk</button>
+      <button data-p="journal">Journal</button>
       <button data-p="mind">Mind</button>
     </div>
-    <div class="pane on feed" id="p-today"></div>
-    <div class="pane" id="p-radio"></div>
-    <div class="radio-in" id="radioIn" style="display:none">
-      <input type="text" id="radioText" placeholder="Talk to him on the radio as dispatch...">
-      <button id="radioSend">Send</button>
+    <div class="subbar" id="lifeBar"><button data-m="today" class="on">Today</button><button data-m="all">All thoughts</button></div>
+    <div class="pane on flush" id="p-life"></div>
+    <div class="pane" id="p-talk"></div>
+    <div class="radio-in" id="talkIn" style="display:none">
+      <div class="chan" id="chan"><button data-c="radio" class="on" title="Talk as dispatch, on the open radio">Radio</button><button data-c="voice" title="Speak inside his head">Voice</button></div>
+      <input type="text" id="talkText" placeholder="Talk to him on the radio as dispatch...">
+      <button id="talkSend">Send</button>
     </div>
-    <div class="pane" id="p-voice"></div>
-    <div class="radio-in" id="voiceIn" style="display:none">
-      <input type="text" id="voiceText" placeholder="Speak inside his head...">
-      <button id="voiceSend">Whisper</button>
+    <div class="pane" id="p-journal">
+      <div class="subbar" style="padding:0" id="journalBar"><button data-m="diary" class="on">Diary</button><button data-m="log">Logbook</button></div>
+      <div id="journalBody"></div>
     </div>
-    <div class="pane" id="p-diary"><div class="diary"><div class="days" id="days"></div><div class="page" id="page"><span class="muted">No entries yet. He writes before bed.</span></div></div></div>
-    <div class="pane" id="p-thoughts"></div>
-    <div class="pane log" id="p-log"></div>
     <div class="pane" id="p-mind"></div>
   </div>
 </main>
@@ -181,7 +212,7 @@ const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;
 const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0"); };
 const post = (url, body) => fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
 
-let MAP = null, S = null, base = null, view = "forest", god = false, tab = "today";
+let MAP = null, S = null, base = null, view = "forest", god = false, tab = "life";
 let spritePrev = null, spriteNext = null, spriteT0 = 0;
 let diary = [], diaryCount = -1, diarySel = -1;
 let particles = [], selTile = null;
@@ -431,80 +462,106 @@ function render(ts) {
 
 // ---------- panels ----------
 const prioCol = {routine: "#6f6757", urgent: "#c7862e", emergency: "#c0392b"};
+const day = t => Math.floor(t / 1440) + 1;
+let lifeMode = "today", talkCh = "radio", journalMode = "diary";
 function renderNow() {
   const a = S.agent, name = S.character.short_name;
   let doing = a.asleep ? "asleep" : (ACT[a.activity] || a.activity);
   if (a.arg && ["read", "use_item", "project", "repair"].includes(a.activity)) doing += ": " + a.arg;
   if (a.arg && a.activity === "watch_closely") doing += " (" + a.arg + ")";
   $("nowTitle").textContent = `${name} is ${doing}`;
-  $("nowSub").textContent = a.asleep ? `Wakes around ${hhmm(a.wake_at)}` :
-    `${a.travel_from ? "On his way, " : ""}${a.loc_name} · since ${hhmm(a.start)} · feels ${a.feel}`;
+  $("nowSub").textContent = a.asleep ? `wakes around ${hhmm(a.wake_at)}` :
+    `${a.travel_from ? "on his way · " : ""}${a.loc_name} · since ${hhmm(a.start)}`;
   $("thought").textContent = a.thought ? "“" + a.thought + "”" : "";
   const tr = S.brain && S.brain.trying;
-  const trying = !tr ? "" : tr.startsWith("waiting") ? " (a model is busy; waiting for it)" : ` (asking ${tr.replace("gemini:", "")})`;
-  $("thinking").textContent = S.thinking ? S.thinking + "..." + trying + " The world waits while he thinks." : "";
-  const n = a.needs, bars = [["Energy", n.energy, "#8fb36a"], ["Hunger", n.hunger, "#d9a04c"], ["Boredom", n.boredom, "#b08fd0"], ["Lonely", n.lonely, "#7fb0d0"]];
+  const trying = !tr ? "" : tr.startsWith("waiting") ? " (a model is busy, waiting)" : "";
+  $("thinking").textContent = S.thinking ? S.thinking + "..." + trying : "";
+  const n = a.needs, bars = [["energy", n.energy, "#8fb36a"], ["hunger", n.hunger, "#d9a04c"], ["boredom", n.boredom, "#b08fd0"], ["lonely", n.lonely, "#7fb0d0"]];
   $("needs").innerHTML = bars.map(([l, v, c]) => `<div class="need"><label>${l}</label><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`).join("");
 }
-function renderToday() {
-  const el = $("p-today");
-  const rows = S.today.slice().reverse().map(x => `<div class="k-${x.kind}"><span class="t">${hhmm(x.t)}</span>${esc(x.text)}</div>`).join("");
-  el.innerHTML = rows || `<div class="muted">Nothing yet today.</div>`;
+
+// Life: today's happenings and thoughts in one timeline, or every thought with search
+let thoughts = [], thoughtsAt = 0;
+async function loadThoughts() { thoughts = await (await fetch("/api/thoughts")).json(); thoughtsAt = Date.now(); renderLife(); }
+const thoughtHTML = t => `<div class="th ${t.kind}"><q>${esc(t.text)}</q><div class="meta">${hhmm(t.t)} · ${t.kind === "reaction" ? "reacting to something he heard" : esc((t.doing || "").replace(/_/g, " "))}</div></div>`;
+function renderLife() {
+  const el = $("p-life");
+  if (lifeMode === "today") {
+    const since = S.today.length ? S.today[0].t : S.minute - 1440;
+    const items = [
+      ...S.today.filter(x => x.kind !== "activity").map(x => ({t: x.t, html: `<div class="ev k-${x.kind}"><span class="t">${hhmm(x.t)}</span>${esc(x.text)}</div>`})),
+      ...(S.thoughts_recent || []).filter(t => t.t >= since).map(t => ({t: t.t, html: thoughtHTML(t)})),
+    ].sort((p, q) => q.t - p.t);
+    el.innerHTML = items.map(i => i.html).join("") || `<div class="muted">Nothing yet today.</div>`;
+    return;
+  }
+  const q = ($("thSearch") && $("thSearch").value || "").toLowerCase();
+  let out = "", d = -1;
+  for (const t of thoughts.slice().reverse()) {
+    if (q && !t.text.toLowerCase().includes(q)) continue;
+    if (day(t.t) !== d) { d = day(t.t); out += `<div class="dayhead">Day ${d}</div>`; }
+    out += thoughtHTML(t);
+  }
+  const keep = $("thSearch") ? $("thSearch").value : "";
+  el.innerHTML = `<input type="text" id="thSearch" placeholder="Search all his thoughts..." style="width:100%;margin:4px 0 6px" value="${esc(keep)}">` +
+    (out || `<div class="muted">No thoughts found.</div>`);
+  const inp = $("thSearch"); inp.oninput = renderLife;
+  if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
-let lastRadioLen = -1;
-function renderRadio() {
-  const el = $("p-radio"), stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+
+// Talk: radio and voice in one conversation
+let lastTalkLen = -1;
+function renderTalk() {
+  const el = $("p-talk"), name = S.character.short_name, stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
   const open = Object.fromEntries(S.reports.filter(r => r.status === "open").map(r => [r.id, r]));
-  const name = S.character.short_name;
-  el.innerHTML = S.radio.map(m => {
+  const items = [];
+  for (const m of S.radio) {
     const cls = m.from === name ? "julian" : m.from === "Dispatch (you)" ? "you" : m.from.includes("auto") ? "auto" : m.from.includes("relay") ? "relay" : "base";
     const rep = m.report && open[m.report] && m.from === name ? open[m.report] : null;
     const r2 = m.report ? S.reports.find(r => r.id === m.report) : null;
     const prio = r2 && m.from === name ? `<span class="prio" style="background:${prioCol[r2.priority]}">${r2.priority}</span>` : "";
-    const acts = rep ? `<div class="acts">
-        <button onclick="act('${rep.id}','crew')">Send crew</button><button onclick="act('${rep.id}','ranger')">Send ranger</button>
+    const acts = rep ? `<div class="acts"><button onclick="act('${rep.id}','crew')">Send crew</button><button onclick="act('${rep.id}','ranger')">Send ranger</button>
         <button onclick="act('${rep.id}','watch')">Keep watching</button><button onclick="act('${rep.id}','disregard')">Disregard</button></div>` : "";
-    return `<div class="msg ${cls}"><div class="who">${esc(m.from)} · D${Math.floor(m.t / 1440) + 1} ${hhmm(m.t)}${prio}</div>${esc(m.text)}${acts}</div>`;
-  }).join("") || `<div class="muted">Radio is quiet.</div>`;
-  if (stick || lastRadioLen !== S.radio.length) el.scrollTop = el.scrollHeight;
-  lastRadioLen = S.radio.length;
+    const who = m.from === name ? `${esc(name)} · radio` : esc(m.from);
+    items.push({t: m.t, html: `<div class="msg ${cls}"><div class="who">${who} · D${day(m.t)} ${hhmm(m.t)}${prio}</div>${esc(m.text)}${acts}</div>`});
+  }
+  for (const v of S.voice) items.push({t: v.t + 0.01, html: v.from === "voice"
+    ? `<div class="msg voice"><div class="who">You, as the voice · D${day(v.t)} ${hhmm(v.t)}${v.dream ? " · in a dream" : ""}</div>${esc(v.text)}</div>`
+    : `<div class="msg inner"><div class="who">${esc(name)}, in his head · D${day(v.t)} ${hhmm(v.t)}</div>${esc(v.text)}</div>`});
+  items.sort((p, q) => p.t - q.t);
+  const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? "He's asleep; he'll hear the voice in a dream." : "He's hearing it..."}</div>` : "";
+  el.innerHTML = (items.map(i => i.html).join("") || `<div class="muted">Nothing said yet. Use Radio to talk as dispatch, or Voice to speak inside his head.</div>`) + pend;
+  const len = S.radio.length + S.voice.length;
+  if (stick || lastTalkLen !== len) el.scrollTop = el.scrollHeight;
+  lastTalkLen = len;
 }
 window.act = (id, action) => post("/api/report", {id, action}).then(poll);
-let thoughts = [], thoughtsAt = 0;
-async function loadThoughts() {
-  thoughts = await (await fetch("/api/thoughts")).json(); thoughtsAt = Date.now(); renderThoughts();
+const sendTalk = () => {
+  const t = $("talkText").value.trim(); if (!t) return;
+  post(talkCh === "radio" ? "/api/radio" : "/api/voice", {text: t}).then(() => { $("talkText").value = ""; poll(); });
+};
+
+// Journal: diary or logbook
+async function loadDiary() {
+  diary = await (await fetch("/api/diary")).json();
+  if (diarySel < 0 || diarySel >= diary.length) diarySel = diary.length - 1;
+  renderJournal();
 }
-function renderThoughts() {
-  const el = $("p-thoughts"); let out = "", day = -1;
-  const q = ($("thSearch") && $("thSearch").value || "").toLowerCase();
-  for (const t of thoughts.slice().reverse()) {
-    if (q && !t.text.toLowerCase().includes(q)) continue;
-    const d = Math.floor(t.t / 1440) + 1;
-    if (d !== day) { out += `<div class="dayhead">Day ${d}</div>`; day = d; }
-    out += `<div class="th ${t.kind}"><q>${esc(t.text)}</q><div class="meta">${hhmm(t.t)} · ${t.kind === "reaction" ? "reacting to something he heard" : esc((t.doing || "").replace(/_/g, " "))}</div></div>`;
+function renderJournal() {
+  const el = $("journalBody");
+  if (journalMode === "log") {
+    el.className = "log"; el.style.overflowY = "auto";
+    el.innerHTML = S.log.slice().reverse().map(x => `<div>D${day(x.t)} ${hhmm(x.t)}  ${esc(x.text)}</div>`).join("");
+    return;
   }
-  const keep = $("thSearch") ? $("thSearch").value : "";
-  el.innerHTML = `<input type="text" id="thSearch" placeholder="Search his thoughts..." style="width:100%;margin-bottom:6px" value="${esc(keep)}">` +
-    (out || `<div class="muted">No thoughts saved yet. They're recorded from now on.</div>`);
-  const inp = $("thSearch"); inp.oninput = renderThoughts;
-  if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  el.className = "diary"; el.style.overflowY = "";
+  const d = diary[diarySel];
+  el.innerHTML = `<div class="days">${diary.map((e, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${e.day + 1}<br>${esc(e.date)}${e.year ? ", Y" + e.year : ""}</div>`).reverse().join("")}</div>` +
+    `<div class="page">${d ? `<h3>Day ${d.day + 1} · ${esc(d.date)}${d.year ? ", Year " + d.year : ""}</h3>${esc(d.text)}${d.tomorrow ? `<div class="tmr">Tomorrow: ${esc(d.tomorrow)}</div>` : ""}`
+                         : `<span class="muted">No entries yet. He writes before bed.</span>`}</div>`;
 }
-let lastVoiceLen = -1;
-function renderVoice() {
-  const el = $("p-voice"), name = S.character.short_name;
-  const intro = `<div class="muted" style="margin-bottom:10px">You are a voice inside ${esc(name)}'s head. He hears you as something that isn't his own thought, and he decides whether to answer, doubt you, or ignore you. If he's asleep, you'll reach him in a dream.</div>`;
-  const rows = S.voice.map(v => v.from === "voice"
-    ? `<div class="msg voice"><div class="who">The voice · D${Math.floor(v.t / 1440) + 1} ${hhmm(v.t)}${v.dream ? " · in a dream" : ""}</div>${esc(v.text)}</div>`
-    : `<div class="msg inner"><div class="who">${esc(name)}, in his head · D${Math.floor(v.t / 1440) + 1} ${hhmm(v.t)}</div>${esc(v.text)}</div>`).join("");
-  const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? "He's asleep. He'll hear it in a dream and react when he wakes." : "He's hearing it..."}</div>` : "";
-  el.innerHTML = intro + rows + pend;
-  if (lastVoiceLen !== S.voice.length) el.scrollTop = el.scrollHeight;
-  lastVoiceLen = S.voice.length;
-}
-const sendVoice = () => { const t = $("voiceText").value.trim(); if (!t) return; post("/api/voice", {text: t}).then(() => { $("voiceText").value = ""; poll(); }); };
-function renderLog() {
-  $("p-log").innerHTML = S.log.slice().reverse().map(x => `<div>D${Math.floor(x.t / 1440) + 1} ${hhmm(x.t)}  ${esc(x.text)}</div>`).join("");
-}
+window.pickDay = i => { diarySel = i; renderJournal(); };
+
 function renderMind() {
   const L = Object.entries(S.ledger).sort((a, b) => Math.abs(b[1].score) - Math.abs(a[1].score));
   const feel = L.map(([k, v]) => {
@@ -513,48 +570,36 @@ function renderMind() {
     return `<div class="feel"><div>${esc(k)} <small>${word} · ${esc(v.notes[v.notes.length - 1] || "")}</small></div>
       <div class="fbar"><i style="left:${pos ? 50 : 50 - pct}%;width:${pct}%;background:${pos ? "#8fb36a" : "#d9634c"}"></i></div></div>`;
   }).join("") || `<div class="muted">No opinions yet. They form from what happens to him.</div>`;
-  const bel = S.beliefs.length ? `<ul class="plain">${S.beliefs.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : `<div class="muted">Nothing concluded yet.</div>`;
-  const pr = S.projects.length ? `<ul class="plain">${S.projects.map(p => `<li><b>${esc(p.name)}</b> <span class="muted">${p.status}, day ${p.day + 1}, ${p.sessions} sessions</span><br>${esc(p.notes[p.notes.length - 1] || "")}</li>`).join("")}</ul>` : `<div class="muted">No side projects yet.</div>`;
+  const list = (arr, f, empty) => arr.length ? `<ul class="plain">${arr.map(f).join("")}</ul>` : `<div class="muted">${empty}</div>`;
   const fx = S.fixables || [];
-  const rep = fx.length ? `<ul class="plain">${fx.map(f => `<li>${esc(f.name)} <span class="muted">${f.broken ? (f.times_fixed ? "broken again" : "broken") + (f.attempts ? `, ${f.attempts} failed tr${f.attempts > 1 ? "ies" : "y"}` : "") : "fixed on day " + (f.fixed_day + 1)}</span></li>`).join("")}</ul>` : `<div class="muted">Nothing noticed yet.</div>`;
-  const inv = `<ul class="plain">${S.inventory.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`;
-  $("p-mind").innerHTML = `<h4>Likes and dislikes</h4>${feel}<h4>What he's concluded</h4>${bel}<h4>Facts about his life</h4>${(S.self_facts || []).length ? `<ul class="plain">${S.self_facts.map(f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`).join("")}</ul>` : `<div class="muted">Nothing established yet. Ask him about his past.</div>`}<h4>Side projects</h4>${pr}<h4>Repairs</h4>${rep}<h4>His things</h4>${inv}
-    <h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot decisions: ${S.stats.offline_calls}</div>
-    <div class="muted">Calls since this window opened, today (Google's day): ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none yet"}</div>`;
+  $("p-mind").innerHTML =
+    `<h4>Likes and dislikes</h4>${feel}` +
+    `<h4>What he's concluded</h4>${list(S.beliefs, b => `<li>${esc(b)}</li>`, "Nothing concluded yet.")}` +
+    `<h4>Facts about his life</h4>${list(S.self_facts || [], f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`, "Nothing established yet. Ask him about his past.")}` +
+    `<h4>Side projects</h4>${list(S.projects, p => `<li><b>${esc(p.name)}</b> <span class="muted">${p.status}, ${p.sessions} sessions</span><br>${esc(p.notes[p.notes.length - 1] || "")}</li>`, "No side projects yet.")}` +
+    `<h4>Repairs</h4>${list(fx, f => `<li>${esc(f.name)} <span class="muted">${f.broken ? (f.times_fixed ? "broken again" : "broken") + (f.attempts ? `, ${f.attempts} failed tr${f.attempts > 1 ? "ies" : "y"}` : "") : "fixed on day " + (f.fixed_day + 1)}</span></li>`, "Nothing noticed yet.")}` +
+    `<h4>His things</h4>${list(S.inventory, i => `<li>${esc(i)}</li>`, "")}` +
+    `<h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot: ${S.stats.offline_calls} · today: ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none"}</div>`;
 }
-async function loadDiary() {
-  diary = await (await fetch("/api/diary")).json();
-  if (diarySel < 0 || diarySel >= diary.length) diarySel = diary.length - 1;
-  renderDiary();
-}
-function renderDiary() {
-  $("days").innerHTML = diary.map((d, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${d.day + 1}<br>${esc(d.date)}${d.year ? ", Y" + d.year : ""}</div>`).reverse().join("");
-  const d = diary[diarySel];
-  $("page").innerHTML = d ? `<h3>Day ${d.day + 1} · ${esc(d.date)}${d.year ? ", Year " + d.year : ""}</h3>${esc(d.text)}${d.tomorrow ? `<div class="tmr">Tomorrow: ${esc(d.tomorrow)}</div>` : ""}`
-                          : `<span class="muted">No entries yet. He writes before bed.</span>`;
-}
-window.pickDay = i => { diarySel = i; renderDiary(); };
 
+const ICON = d => /blizzard|snow/.test(d) ? "❄" : /thunder/.test(d) ? "⛈" : /rain/.test(d) ? "🌧" : /fog|haz/.test(d) ? "🌫" : /overcast/.test(d) ? "☁" : /partly|cumulus/.test(d) ? "⛅" : "☀";
 function renderHeader() {
   $("title").textContent = S.place.lookout;
-  $("clock").textContent = `Day ${S.day} · ${S.date}, Year ${S.year} · ${S.time}`;
+  $("clock").textContent = `Day ${S.day} · ${S.date} · ${S.time}`;
   const w = S.wx, dir = ["N","NE","E","SE","S","SW","W","NW"][Math.round(w.wind_from / 45) % 8];
-  $("wx").textContent = `${w.desc}, ${w.temp}°F · wind ${dir} ${w.wind_mph} mph · RH ${w.rh}%`;
-  $("wx").textContent += ` · ${S.season}`;
-  const dc = {"Off season": "#4a4a4a", Low: "#3d6b3a", Moderate: "#2f5f80", High: "#a17a1e", "Very High": "#b4521f", Extreme: "#a3241a"}[w.danger];
-  $("danger").textContent = "Fire danger: " + w.danger; $("danger").style.background = dc;
+  const dc = {Low: "#3d6b3a", Moderate: "#2f5f80", High: "#a17a1e", "Very High": "#b4521f", Extreme: "#a3241a"}[w.danger];
+  $("wx").innerHTML = `<span title="${esc(w.desc)}, humidity ${w.rh}%, ${esc(S.season)}">${ICON(w.desc)} ${w.temp}°F · ${dir} ${w.wind_mph} mph</span>` +
+    (dc ? `<span class="chip" style="background:${dc}" title="Fire danger">${esc(w.danger)}</span>` : "");
   $("speeds").innerHTML = [[0, "⏸"], [1, "1×"], [5, "5×"], [20, "20×"], [60, "60×"]].map(([v, l]) =>
     `<button class="${S.speed == v ? "on" : ""}" onclick="speed(${v})" title="${v ? v + " sim-minutes per second" : "pause"}">${l}</button>`).join("");
   const b = S.brain;
-  $("bdot").style.background = b.ok === true ? "#8fb36a" : b.ok === false ? "#d9634c" : "#6f6757";
-  $("btext").textContent = b.chain.length === 0 ? "No model set up (autopilot)" : b.ok === false ? "Model trouble: " + (b.error || "") :
-    b.model ? "Brain: " + b.model.replace("gemini:", "") : "Brain: waiting";
-  $("btext").title = (b.error || "") + "\nChain: " + b.chain.join(" → ") + "\nAvailable now: " + b.available.join(", ");
+  const st = b.chain.length === 0 ? ["No brain", "#6f6757"] : b.tier === "autopilot" ? ["Brain dead", "#d9634c"] :
+    b.tier === "backup" ? (b.main_out ? ["Backup brain", "#e0a045"] : ["Backup (briefly)", "#c9b45a"]) : b.tier === "full" ? ["Full brain", "#8fb36a"] : ["Waking up", "#6f6757"];
+  $("bdot").style.background = st[1]; $("btext").textContent = st[0];
 }
 window.speed = v => post("/api/speed", {speed: v}).then(poll);
-$("btext").style.cursor = "pointer";
-$("btext").onclick = () => { const b = S && S.brain; if (!b) return;
-  toast((b.error ? "Last error: " + b.error : "No errors right now.") + "  |  Models: " + b.chain.map(c => c.replace("gemini:", "")).join(" → "), 15000); };
+$("brainBtn").onclick = () => { const b = S && S.brain; if (!b) return;
+  toast(`Thinking with: ${(b.model || "nothing yet").replace("gemini:", "")}. ` + (b.error ? "Last error: " + b.error : "No errors.") + "  Order: " + b.chain.map(c => c.replace("gemini:", "")).join(" → "), 15000); };
 
 // ---------- brain-limit warnings ----------
 const RANK = {none: 0, full: 0, backup: 1, autopilot: 2};
@@ -582,9 +627,6 @@ function checkBrain() {
     $("mReset").textContent = resetText(b);
     $("modalBg").style.display = "flex";
   }
-  const tb = b.tier === "backup" && !b.main_out ? ["Backup brain (briefly)", "#7a6a2a"] :
-    ({full: ["Full brain", "#3d6b3a"], backup: ["Backup brain", "#a17a1e"], autopilot: ["Brain dead", "#a3241a"], none: ["", ""]}[b.tier] || ["", ""]);
-  $("tierBadge").textContent = tb[0]; $("tierBadge").style.background = tb[1]; $("tierBadge").style.display = tb[0] ? "" : "none";
 }
 function closeModal() { ackRank = RANK[S.brain.tier] ?? 0; modalOpen = false; $("modalBg").style.display = "none"; }
 $("mGo").onclick = closeModal;
@@ -599,13 +641,14 @@ async function poll() {
     spriteNext = next.agent.pos; spriteT0 = performance.now();
     S = next;
     renderHeader(); renderNow(); checkBrain();
-    if (tab === "today") renderToday();
-    if (tab === "radio") renderRadio();
-    if (tab === "log") renderLog();
-    if (tab === "voice") renderVoice();
-    if (tab === "thoughts" && Date.now() - thoughtsAt > 5000 && !(document.activeElement && document.activeElement.id === "thSearch")) loadThoughts();
+    if (tab === "life") {
+      if (lifeMode === "today") renderLife();
+      else if (Date.now() - thoughtsAt > 8000 && !(document.activeElement && document.activeElement.id === "thSearch")) loadThoughts();
+    }
+    if (tab === "talk") renderTalk();
+    if (tab === "journal" && journalMode === "log") renderJournal();
     if (tab === "mind") renderMind();
-    if (S.diary_count !== diaryCount) { const was = diaryCount; diaryCount = S.diary_count; if (was !== -1) diarySel = -1; if (tab === "diary" || was === -1) loadDiary(); }
+    if (S.diary_count !== diaryCount) { const was = diaryCount; diaryCount = S.diary_count; if (was !== -1) diarySel = -1; loadDiary(); }
   } catch (e) { $("thinking").textContent = "Lost contact with the lookout. Is the black window still open?"; }
 }
 
@@ -614,15 +657,26 @@ $("tabs").onclick = e => {
   const p = e.target.dataset.p; if (!p) return; tab = p;
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.p === p));
   document.querySelectorAll(".pane").forEach(el => el.classList.toggle("on", el.id === "p-" + p));
-  $("radioIn").style.display = p === "radio" ? "flex" : "none";
-  $("voiceIn").style.display = p === "voice" ? "flex" : "none";
-  if (p === "diary") loadDiary(); else if (p === "thoughts") loadThoughts(); else poll();
+  $("talkIn").style.display = p === "talk" ? "flex" : "none";
+  $("lifeBar").style.display = p === "life" ? "flex" : "none";
+  if (p === "journal") loadDiary(); else poll();
 };
+$("lifeBar").onclick = e => { const m = e.target.dataset.m; if (!m) return; lifeMode = m;
+  $("lifeBar").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === m));
+  if (m === "all") loadThoughts(); else renderLife(); };
+$("journalBar").onclick = e => { const m = e.target.dataset.m; if (!m) return; journalMode = m;
+  $("journalBar").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === m)); renderJournal(); };
+$("chan").onclick = e => { const c = e.target.dataset.c; if (!c) return; talkCh = c;
+  $("chan").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.c === c));
+  $("talkText").placeholder = c === "radio" ? "Talk to him on the radio as dispatch..." : "Speak inside his head...";
+  $("talkSend").textContent = c === "radio" ? "Send" : "Whisper"; $("talkText").focus(); };
+$("talkSend").onclick = sendTalk;
+$("talkText").onkeydown = e => { if (e.key === "Enter") sendTalk(); };
 const setView = v => { view = v; $("vForest").classList.toggle("on", v === "forest"); $("vSummit").classList.toggle("on", v === "summit"); };
 $("vForest").onclick = () => setView("forest");
 $("vSummit").onclick = () => setView("summit");
 $("vGod").onclick = () => { god = !god; $("vGod").classList.toggle("on", god); };
-const TNAME = {F: "forest", M: "meadow", R: "rock", S: "snowfield", W: Object.freeze("lake"), C: "creek", O: "road", T: "trail", G: "campground", L: "logging cut", P: "the summit", H: "trailhead"};
+const TNAME = {F: "forest", M: "meadow", R: "rock", S: "snowfield", W: "lake", C: "creek", O: "road", T: "trail", G: "campground", L: "logging cut", P: "the summit", H: "trailhead"};
 cv.onclick = e => {
   const rect = cv.getBoundingClientRect(), c = camera();
   const x = Math.floor(((e.clientX - rect.left) * cv.width / rect.width) / c.s + c.ox);
@@ -632,19 +686,18 @@ cv.onclick = e => {
   const [tx, ty] = MAP.tower, dx = x - tx, dy = y - ty;
   const az = Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), mi = (Math.hypot(dx, dy) * .5).toFixed(1);
   $("plantInfo").textContent = `${TNAME[MAP.tiles[y][x]] || "?"} · azimuth ${String(az).padStart(3, "0")}° · ${mi} mi from the tower`;
-  $("plant").style.display = "flex"; $("plantText").focus();
+  const pop = $("plant"), wrap = $("mapwrap").getBoundingClientRect();
+  pop.style.display = "block";
+  pop.style.left = Math.min(wrap.width - 310, Math.max(6, e.clientX - wrap.left + 12)) + "px";
+  pop.style.top = Math.min(wrap.height - 110, Math.max(6, e.clientY - wrap.top + 12)) + "px";
+  $("plantText").focus();
 };
 $("plantX").onclick = () => { selTile = null; $("plant").style.display = "none"; };
 $("plantBtn").onclick = () => {
   const text = $("plantText").value.trim(); if (!text || !selTile) return;
-  post("/api/plant", {x: selTile[0], y: selTile[1], text}).then(() => { $("plantText").value = ""; selTile = null; $("plant").style.display = "none"; });
+  post("/api/plant", {x: selTile[0], y: selTile[1], text}).then(() => { $("plantText").value = ""; selTile = null; $("plant").style.display = "none"; toast("Left it there. He might find it."); });
 };
-$("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); };
-const sendRadio = () => { const t = $("radioText").value.trim(); if (!t) return; post("/api/radio", {text: t}).then(() => { $("radioText").value = ""; poll(); }); };
-$("radioSend").onclick = sendRadio;
-$("voiceSend").onclick = sendVoice;
-$("voiceText").onkeydown = e => { if (e.key === "Enter") sendVoice(); };
-$("radioText").onkeydown = e => { if (e.key === "Enter") sendRadio(); };
+$("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); if (e.key === "Escape") $("plantX").click(); };
 
 (async () => {
   MAP = await (await fetch("/api/map")).json();

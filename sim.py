@@ -1704,6 +1704,7 @@ JSON only, exactly these keys:
             "ledger": s["ledger"], "beliefs": s["beliefs"], "projects": s["projects"],
             "inventory": s["inventory"], "diary_count": len(s["diary"]), "self_facts": s["self_facts"],
             "voice": s["voice"][-120:], "voice_pending": len(s["voice_in"]),
+            "thoughts_recent": s.get("thoughts", [])[-80:],
             "fixables": [{"name": C.FIXABLES[k]["name"], **v} for k, v in s["fixables"].items() if v["noticed"] or not v["broken"]],
             "stats": s["stats"],
         }
