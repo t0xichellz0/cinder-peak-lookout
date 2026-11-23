@@ -708,29 +708,51 @@ const typingNow = () => { const a = document.activeElement; return a && ["INPUT"
 window.addEventListener("keydown", e => { if (!typingNow() && !e.ctrlKey && !e.altKey) held.add(e.key.toLowerCase()); });
 window.addEventListener("keyup", e => held.delete(e.key.toLowerCase()));
 window.addEventListener("blur", () => held.clear());
+const CAM = { sens: 1, smooth: 8 };           // smooth = how quickly motion catches up (lower = floatier)
+const vel = { rot: 0, tilt: 0, zoom: 0, fwd: 0, side: 0 };
+let zoomDist = null;                             // where scroll-zoom is gliding to
+export function setCamera(c) {
+  if (c.sens !== undefined) CAM.sens = c.sens;
+  if (c.smooth !== undefined) CAM.smooth = c.smooth;
+  if (controls) { controls.rotateSpeed = .55 * CAM.sens; controls.panSpeed = .7 * CAM.sens; controls.dampingFactor = Math.max(.04, Math.min(.2, CAM.smooth / 90)); }
+}
 function keyboardCamera(dt) {
-  if (!held.size || typingNow() || (document.getElementById("menu") || {}).classList?.contains("open")) return false;
+  const blocked = typingNow() || (document.getElementById("menu") || {}).classList?.contains("open");
+  const want = blocked ? { rot: 0, tilt: 0, zoom: 0, fwd: 0, side: 0 } : {
+    rot: (held.has("q") ? 1 : 0) - (held.has("e") ? 1 : 0),
+    tilt: (held.has("r") ? 1 : 0) - (held.has("t") ? 1 : 0),
+    zoom: (held.has("-") || held.has("_") ? 1 : 0) - (held.has("+") || held.has("=") ? 1 : 0),
+    fwd: (held.has("w") || held.has("arrowup") ? 1 : 0) - (held.has("s") || held.has("arrowdown") ? 1 : 0),
+    side: (held.has("d") || held.has("arrowright") ? 1 : 0) - (held.has("a") || held.has("arrowleft") ? 1 : 0),
+  };
+  const k = 1 - Math.exp(-dt * CAM.smooth);      // ease velocities toward what the keys ask for
+  let any = false;
+  for (const key in vel) { vel[key] += (want[key] - vel[key]) * k; if (Math.abs(vel[key]) < .002) vel[key] = 0; if (vel[key]) any = true; }
   const off = camera.position.clone().sub(controls.target), dist = off.length();
+  if (zoomDist === null) zoomDist = dist;
   let moved = false;
-  const rot = (held.has("q") ? 1 : 0) - (held.has("e") ? 1 : 0);
-  if (rot) { off.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot * 1.6 * dt); moved = true; }
-  const tilt = (held.has("r") ? 1 : 0) - (held.has("t") ? 1 : 0);
-  if (tilt) {
-    const sph = new THREE.Spherical().setFromVector3(off);
-    sph.phi = Math.max(.15, Math.min(controls.maxPolarAngle, sph.phi - tilt * 1.1 * dt)); off.setFromSpherical(sph); moved = true;
+  if (any) {
+    const sp = CAM.sens;
+    if (vel.rot) off.applyAxisAngle(new THREE.Vector3(0, 1, 0), vel.rot * 1.1 * sp * dt);
+    if (vel.tilt) {
+      const sph = new THREE.Spherical().setFromVector3(off);
+      sph.phi = Math.max(.15, Math.min(controls.maxPolarAngle, sph.phi - vel.tilt * .8 * sp * dt)); off.setFromSpherical(sph);
+    }
+    if (vel.zoom) zoomDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, zoomDist * (1 + vel.zoom * 1.1 * sp * dt)));
+    if (vel.fwd || vel.side) {
+      const f = new THREE.Vector3(-off.x, 0, -off.z).normalize(), r = new THREE.Vector3(-f.z, 0, f.x);
+      const step = new THREE.Vector3().addScaledVector(f, vel.fwd).addScaledVector(r, vel.side).multiplyScalar(dist * .55 * sp * dt);
+      controls.target.add(step);
+      controls.target.x = Math.max(-20, Math.min(W + 20, controls.target.x)); controls.target.z = Math.max(-20, Math.min(H + 20, controls.target.z));
+    }
+    moved = true; flying = null;
   }
-  const zoom = (held.has("-") || held.has("_") ? 1 : 0) - (held.has("+") || held.has("=") ? 1 : 0);
-  if (zoom) { off.multiplyScalar(Math.max(controls.minDistance / dist, Math.min(controls.maxDistance / dist, 1 + zoom * 1.5 * dt))); moved = true; }
-  const fwd = (held.has("w") || held.has("arrowup") ? 1 : 0) - (held.has("s") || held.has("arrowdown") ? 1 : 0);
-  const side = (held.has("d") || held.has("arrowright") ? 1 : 0) - (held.has("a") || held.has("arrowleft") ? 1 : 0);
-  if (fwd || side) {
-    const f = new THREE.Vector3(-off.x, 0, -off.z).normalize(), r = new THREE.Vector3(-f.z, 0, f.x);
-    const step = new THREE.Vector3().addScaledVector(f, fwd).addScaledVector(r, side).normalize().multiplyScalar(dist * .9 * dt);
-    controls.target.add(step);
-    controls.target.x = Math.max(-20, Math.min(W + 20, controls.target.x)); controls.target.z = Math.max(-20, Math.min(H + 20, controls.target.z));
-    moved = true;
+  // smooth zoom (scroll wheel, pinch, +/-): glide the distance toward zoomDist
+  if (!flying && Math.abs(dist - zoomDist) > dist * .001) {
+    const nd = dist + (zoomDist - dist) * (1 - Math.exp(-dt * CAM.smooth * 1.2));
+    off.setLength(nd); moved = true;
   }
-  if (moved) { camera.position.copy(controls.target).add(off); flying = null; }
+  if (moved) camera.position.copy(controls.target).add(off);
   return moved;
 }
 
@@ -775,7 +797,16 @@ export function init(container) {
   controls = new MapControls(camera, renderer.domElement);
   controls.target.set(W / 2, 0, H / 2 + 2);
   controls.enableDamping = true; controls.dampingFactor = .08; controls.screenSpacePanning = false;
-  controls.minDistance = .8; controls.maxDistance = 95; controls.maxPolarAngle = 1.45; controls.zoomSpeed = 1.2;
+  controls.minDistance = .8; controls.maxDistance = 95; controls.maxPolarAngle = 1.45; controls.enableZoom = false;
+  renderer.domElement.addEventListener("wheel", e => {
+    e.preventDefault();
+    const d = camera.position.distanceTo(controls.target);
+    if (zoomDist === null || flying) zoomDist = d;
+    const amount = (e.deltaMode === 1 ? e.deltaY * 30 : e.deltaY) * (e.ctrlKey ? 3 : 1);   // ctrl = touchpad pinch
+    zoomDist = Math.max(controls.minDistance, Math.min(controls.maxDistance, zoomDist * Math.exp(amount * .0011 * CAM.sens)));
+    flying = null;
+  }, { passive: false });
+  setCamera({});
   hemi = new THREE.HemisphereLight("#cfe3ff", "#3b3326", .9); scene.add(hemi);
   sun = new THREE.DirectionalLight("#fff6e8", 2); scene.add(sun); scene.add(sun.target);
   sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
@@ -821,7 +852,7 @@ export function init(container) {
     if (flying) {
       const k = Math.min(1, (now - flying.t0) / 900), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       controls.target.lerpVectors(flying.fromT, flying.toT, e); camera.position.lerpVectors(flying.fromP, flying.toP, e);
-      if (k >= 1) flying = null;
+      if (k >= 1) { flying = null; zoomDist = camera.position.distanceTo(controls.target); }
     }
     if (keyboardCamera(dtFrame)) lastInteract = now;
     controls.update();

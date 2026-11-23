@@ -280,6 +280,8 @@
       <div class="set-row"><span class="label">Frame limit</span><div class="seg" id="setCap"></div></div>
       <div class="set-row"><span class="label">Clouds</span><div class="seg" id="setClouds"></div></div>
       <div class="set-row"><span class="label">Tree sway</span><div class="seg" id="setSway"></div></div>
+      <div class="set-row"><span class="label">Camera sensitivity</span><input type="range" id="setSens" min="25" max="200" step="5"></div>
+      <div class="set-row"><span class="label">Camera smoothing</span><div class="seg" id="setSmooth"></div></div>
       <div class="set-row"><span class="label">Show FPS</span><div class="seg" id="setFps"></div></div>
       <div class="set-row"><span class="label">Pause in menus</span><div class="seg" id="setPause"></div></div>
       <div class="muted" id="setHint" style="margin-top:8px"></div>
@@ -795,6 +797,7 @@ function applySettings() {
                   density: SET.density / 100, clouds: SET.clouds, sway: SET.sway, fog: {Near: 1.6, Normal: 1, Far: .55}[SET.fog],
                   cap: SET.cap || 60 });
   $("fps").style.display = SET.fps ? "block" : "none";
+  if (w3.setCamera) w3.setCamera({ sens: (SET.camSens || 100) / 100, smooth: {Snappy: 14, Smooth: 8, Floaty: 4}[SET.camSmooth || "Smooth"] });
 }
 function seg(id, options, get, set) {
   const el = $(id);
@@ -813,6 +816,9 @@ function buildSettings() {
   const onoff = [["true", "On"], ["false", "Off"]];
   seg("setClouds", onoff, () => SET.clouds, v => { SET.clouds = v === "true"; custom(); applySettings(); saveSettings(); });
   seg("setSway", onoff, () => SET.sway, v => { SET.sway = v === "true"; custom(); applySettings(); saveSettings(); });
+  seg("setSmooth", [["Snappy", "Snappy"], ["Smooth", "Smooth"], ["Floaty", "Floaty"]], () => SET.camSmooth || "Smooth", v => { SET.camSmooth = v; applySettings(); saveSettings(); });
+  $("setSens").value = SET.camSens || 100;
+  $("setSens").oninput = e => { SET.camSens = +e.target.value; applySettings(); saveSettings(); };
   seg("setFps", onoff, () => SET.fps, v => { SET.fps = v === "true"; applySettings(); saveSettings(); });
   seg("setPause", onoff, () => SET.pauseMenu, v => { SET.pauseMenu = v === "true"; saveSettings(); });
   $("setDensity").value = SET.density; $("setScale").value = SET.scale;
