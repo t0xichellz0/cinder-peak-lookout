@@ -702,6 +702,38 @@ export function setMenu(on) {
   }
 }
 
+// ---------- keyboard camera: Q/E rotate, WASD move, R/T tilt, +/- zoom ----------
+const held = new Set();
+const typingNow = () => { const a = document.activeElement; return a && ["INPUT", "TEXTAREA"].includes(a.tagName); };
+window.addEventListener("keydown", e => { if (!typingNow() && !e.ctrlKey && !e.altKey) held.add(e.key.toLowerCase()); });
+window.addEventListener("keyup", e => held.delete(e.key.toLowerCase()));
+window.addEventListener("blur", () => held.clear());
+function keyboardCamera(dt) {
+  if (!held.size || typingNow() || (document.getElementById("menu") || {}).classList?.contains("open")) return false;
+  const off = camera.position.clone().sub(controls.target), dist = off.length();
+  let moved = false;
+  const rot = (held.has("q") ? 1 : 0) - (held.has("e") ? 1 : 0);
+  if (rot) { off.applyAxisAngle(new THREE.Vector3(0, 1, 0), rot * 1.6 * dt); moved = true; }
+  const tilt = (held.has("r") ? 1 : 0) - (held.has("t") ? 1 : 0);
+  if (tilt) {
+    const sph = new THREE.Spherical().setFromVector3(off);
+    sph.phi = Math.max(.15, Math.min(controls.maxPolarAngle, sph.phi - tilt * 1.1 * dt)); off.setFromSpherical(sph); moved = true;
+  }
+  const zoom = (held.has("-") || held.has("_") ? 1 : 0) - (held.has("+") || held.has("=") ? 1 : 0);
+  if (zoom) { off.multiplyScalar(Math.max(controls.minDistance / dist, Math.min(controls.maxDistance / dist, 1 + zoom * 1.5 * dt))); moved = true; }
+  const fwd = (held.has("w") || held.has("arrowup") ? 1 : 0) - (held.has("s") || held.has("arrowdown") ? 1 : 0);
+  const side = (held.has("d") || held.has("arrowright") ? 1 : 0) - (held.has("a") || held.has("arrowleft") ? 1 : 0);
+  if (fwd || side) {
+    const f = new THREE.Vector3(-off.x, 0, -off.z).normalize(), r = new THREE.Vector3(-f.z, 0, f.x);
+    const step = new THREE.Vector3().addScaledVector(f, fwd).addScaledVector(r, side).normalize().multiplyScalar(dist * .9 * dt);
+    controls.target.add(step);
+    controls.target.x = Math.max(-20, Math.min(W + 20, controls.target.x)); controls.target.z = Math.max(-20, Math.min(H + 20, controls.target.z));
+    moved = true;
+  }
+  if (moved) { camera.position.copy(controls.target).add(off); flying = null; }
+  return moved;
+}
+
 // ---------- camera ----------
 function groundY(x, z) { return (x >= 0 && x <= W && z >= 0 && z <= H) ? heightAt(x, z) : outerHeight(x, z); }
 export function flyTo(where) {
@@ -784,13 +816,14 @@ export function init(container) {
     const idle = (window.__S.speed === 0 && !flying && !menuOrbit && now - lastInteract > 1500);
     const cap = !document.hasFocus() ? Math.min(Q.cap, 20) : idle ? 12 : Q.cap;
     if (now - lastFrame < 1000 / cap - 1) return;
-    lastFrame = now;
+    const dtFrame = Math.min(.05, Math.max(.001, (now - lastFrame) / 1000)); lastFrame = now;
     frames.push(now); while (frames.length && now - frames[0] > 1000) frames.shift();
     if (flying) {
       const k = Math.min(1, (now - flying.t0) / 900), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
       controls.target.lerpVectors(flying.fromT, flying.toT, e); camera.position.lerpVectors(flying.fromP, flying.toP, e);
       if (k >= 1) flying = null;
     }
+    if (keyboardCamera(dtFrame)) lastInteract = now;
     controls.update();
     const gy = groundY(controls.target.x, controls.target.z);
     if (Math.abs(controls.target.y - gy) > .01) { const dy = gy - controls.target.y; controls.target.y += dy * .25; camera.position.y += dy * .25; }
