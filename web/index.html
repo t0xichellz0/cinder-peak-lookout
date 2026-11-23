@@ -142,6 +142,17 @@
   #p-journal { display: none; flex-direction: column; } #p-journal.on { display: flex; }
   #journalBody { flex: 1; min-height: 0; margin-top: 10px; }
   .pane.flush { padding-top: 6px; }
+  .gl3d { position: relative; width: 100%; aspect-ratio: 1024 / 640; display: none; }
+  .gl3d canvas { width: 100% !important; height: 100% !important; cursor: grab; image-rendering: auto; }
+  .overlay3d { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .lbl3d { position: absolute; left: 0; top: 0; white-space: nowrap; font-size: 12px; }
+  .lbl3d.sight { color: #ffd36b; font-weight: 700; text-shadow: 0 1px 3px #000; }
+  .lbl3d.god { color: #fff; font-size: 11px; text-shadow: 0 1px 3px #000; }
+  .lbl3d.zzz { color: #e6e6ff; font: bold 16px Georgia; text-shadow: 0 1px 4px #000; }
+  .lbl3d.bubble { white-space: normal; max-width: 260px; background: rgba(245,238,222,.95); color: #2c2418; border: 1.5px solid #2c2418;
+                  border-radius: 8px; padding: 6px 10px; font: 14px Georgia, serif; }
+  .lbl3d.bubble.thought { background: rgba(232,222,245,.95); border-style: dashed; border-radius: 16px; }
+  .maptools .sep { width: 8px; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; height: auto; } .right { height: 80vh; } }
 </style>
 </head>
@@ -157,7 +168,11 @@
   <div class="left">
     <div class="mapwrap" id="mapwrap">
       <canvas id="cv" width="1024" height="640"></canvas>
+      <div class="gl3d" id="gl"></div>
       <div class="maptools">
+        <button id="v3d" title="3D view: scroll or pinch to zoom, drag to pan, right-drag to rotate">3D</button>
+        <button id="v2d">2D</button>
+        <span class="sep"></span>
         <button id="vForest" class="on">Forest</button>
         <button id="vSummit">Summit</button>
         <button id="vGod" title="See everything happening, including what he hasn't noticed">God view</button>
@@ -206,6 +221,7 @@
   <div class="row"><button id="mPause">Pause the world</button><button id="mGo" class="on">Keep going</button></div>
 </div></div>
 <div class="toast" id="toast"></div>
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -349,7 +365,7 @@ function bubble(sx, sy, text, thought) {
 
 function render(ts) {
   requestAnimationFrame(render);
-  if (!MAP || !S || !base) return;
+  if (!MAP || !S || !base || window.__mapMode === "3d") return;
   const c = camera();
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
@@ -639,7 +655,7 @@ async function poll() {
     const r = await fetch("/api/state"); const next = await r.json();
     if (S && S.agent) { spritePrev = spriteNext || S.agent.pos; } else spritePrev = next.agent.pos;
     spriteNext = next.agent.pos; spriteT0 = performance.now();
-    S = next;
+    S = next; window.__S = S;
     renderHeader(); renderNow(); checkBrain();
     if (tab === "life") {
       if (lifeMode === "today") renderLife();
@@ -672,15 +688,36 @@ $("chan").onclick = e => { const c = e.target.dataset.c; if (!c) return; talkCh 
   $("talkSend").textContent = c === "radio" ? "Send" : "Whisper"; $("talkText").focus(); };
 $("talkSend").onclick = sendTalk;
 $("talkText").onkeydown = e => { if (e.key === "Enter") sendTalk(); };
-const setView = v => { view = v; $("vForest").classList.toggle("on", v === "forest"); $("vSummit").classList.toggle("on", v === "summit"); };
+const setView = v => { view = v; $("vForest").classList.toggle("on", v === "forest"); $("vSummit").classList.toggle("on", v === "summit");
+  if (window.__mapMode === "3d" && window.__fly) window.__fly(v); };
+window.__esc = esc;
+function curSpritePos() {
+  if (!(spritePrev && spriteNext)) return S.agent.pos;
+  const k = Math.min(1, (performance.now() - spriteT0) / 850);
+  return [spritePrev[0] + (spriteNext[0] - spritePrev[0]) * k, spritePrev[1] + (spriteNext[1] - spritePrev[1]) * k];
+}
+window.__spritePos = curSpritePos;
+window.__spritePrevPos = () => spritePrev || S.agent.pos;
+function setMode(m) {
+  window.__mapMode = m;
+  $("v3d").classList.toggle("on", m === "3d"); $("v2d").classList.toggle("on", m === "2d");
+  $("gl").style.display = m === "3d" ? "block" : "none"; cv.style.display = m === "3d" ? "none" : "block";
+  try { localStorage.setItem("lookoutMapMode", m); } catch (e) {}
+}
+$("v3d").onclick = () => setMode("3d");
+$("v2d").onclick = () => setMode("2d");
 $("vForest").onclick = () => setView("forest");
 $("vSummit").onclick = () => setView("summit");
-$("vGod").onclick = () => { god = !god; $("vGod").classList.toggle("on", god); };
+$("vGod").onclick = () => { god = !god; window.__god = god; $("vGod").classList.toggle("on", god); };
 const TNAME = {F: "forest", M: "meadow", R: "rock", S: "snowfield", W: "lake", C: "creek", O: "road", T: "trail", G: "campground", L: "logging cut", P: "the summit", H: "trailhead"};
 cv.onclick = e => {
   const rect = cv.getBoundingClientRect(), c = camera();
   const x = Math.floor(((e.clientX - rect.left) * cv.width / rect.width) / c.s + c.ox);
   const y = Math.floor(((e.clientY - rect.top) * cv.height / rect.height) / c.s + c.oy);
+  openPlant(x, y, e.clientX, e.clientY);
+};
+function openPlant(x, y, clientX, clientY) {
+  const e = {clientX, clientY};
   if (y < 0 || y >= MAP.tiles.length || x < 0 || x >= MAP.tiles[0].length) return;
   selTile = [x, y];
   const [tx, ty] = MAP.tower, dx = x - tx, dy = y - ty;
@@ -691,7 +728,8 @@ cv.onclick = e => {
   pop.style.left = Math.min(wrap.width - 310, Math.max(6, e.clientX - wrap.left + 12)) + "px";
   pop.style.top = Math.min(wrap.height - 110, Math.max(6, e.clientY - wrap.top + 12)) + "px";
   $("plantText").focus();
-};
+}
+window.__openPlant = openPlant;
 $("plantX").onclick = () => { selTile = null; $("plant").style.display = "none"; };
 $("plantBtn").onclick = () => {
   const text = $("plantText").value.trim(); if (!text || !selTile) return;
@@ -700,9 +738,17 @@ $("plantBtn").onclick = () => {
 $("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); if (e.key === "Escape") $("plantX").click(); };
 
 (async () => {
-  MAP = await (await fetch("/api/map")).json();
+  MAP = await (await fetch("/api/map")).json(); window.__MAP = MAP;
   buildBase();
   await poll();
+  let pref = "3d"; try { pref = localStorage.getItem("lookoutMapMode") || "3d"; } catch (e) {}
+  try {
+    const w3 = await import("./world3d.js");
+    w3.init($("gl")); window.__fly = w3.flyTo;
+    setMode(pref);
+  } catch (err) {
+    console.error("3D view unavailable:", err); setMode("2d"); $("v3d").style.display = "none";
+  }
   setInterval(poll, 800);
   requestAnimationFrame(render);
 })();

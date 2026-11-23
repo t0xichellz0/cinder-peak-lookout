@@ -153,6 +153,7 @@ def gen_map(seed):
                 key=lambda p: math.hypot(p[0] - tx, p[1] - ty))
     ridge = [24.5, 12.5]
     return {"tiles": tiles, "tower": [tx, ty], "spots": spots,
+            "elev": [[round(v, 3) for v in row] for row in elev],
             "shore": [shore[0] - 0.6, shore[1] - 0.9], "ridge": ridge}
 
 

@@ -12,7 +12,9 @@ opens the lookout page. Closing the black window pauses the world; it's saved
 and continues next time.
 
 THE PAGE
-- Map: Forest view shows the whole area, Summit view zooms in on Julian.
+- Map: 3D by default. Scroll or pinch to zoom, drag to pan, right-drag (or two-finger
+  drag) to rotate. Forest flies out to the whole area, Summit flies to the tower.
+  The 2D button switches to the old flat map if your laptop struggles.
   God view shows everything that's happening, including what he hasn't noticed.
 - Click anywhere on the map to leave something there for him to find.
 - Speed buttons: pause, 1x (a day takes 24 real minutes), 5x, 20x, 60x.

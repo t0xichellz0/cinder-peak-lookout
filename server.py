@@ -137,7 +137,16 @@ def make_handler(sim, brain):
                 return self.send(200, snap)
             if p == "/api/map":
                 with sim.lock:
-                    return self.send(200, {"tiles": sim.map["tiles"], "tower": sim.map["tower"]})
+                    elev = sim.map.get("elev")
+                    if not elev:  # older saves: rebuild the same elevation from the world seed
+                        from sim import gen_map
+                        elev = sim.map["elev"] = gen_map(sim.cfg.get("world_seed", 4127))["elev"]
+                    return self.send(200, {"tiles": sim.map["tiles"], "tower": sim.map["tower"], "elev": elev})
+            if p.endswith(".js") or p.startswith("/vendor/"):
+                full = os.path.normpath(os.path.join(web, p.lstrip("/")))
+                if full.startswith(os.path.normpath(web)) and os.path.isfile(full):
+                    with open(full, "rb") as f:
+                        return self.send(200, f.read(), "text/javascript")
             if p == "/api/thoughts":
                 with sim.lock:
                     return self.send(200, sim.s.get("thoughts", []))
