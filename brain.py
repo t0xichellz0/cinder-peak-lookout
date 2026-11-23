@@ -39,6 +39,8 @@ class Brain:
         self.last_call = 0.0
         self.last_by = {}
         self.counts = {}
+        self.per = {}   # per-model: last error, last success
+        self.log_path = None
         self.status = {"model": None, "ok": None, "error": None, "calls": 0, "fails": 0, "at": None,
                        "tier": "none", "reset_at": None}
         self.gclient = None
@@ -100,8 +102,32 @@ class Brain:
         soon = time.time() + 3600
         # main brain is "out for the day" only if every main model is dead or cooled for a long time
         main_out = bool(main) and all(n in self.dead or self.cool.get(n, 0) > soon for n in main)
+        now = time.time()
+        models = []
+        for n in names:
+            info = self.per.get(n, {})
+            until = self.cool.get(n, 0)
+            if n in self.dead:
+                state = "dead"
+            elif until > now + 3600:
+                state = "out for today"
+            elif until > now:
+                state = f"busy, back in {int(until - now)}s"
+            else:
+                state = "ready"
+            models.append({"name": n, "state": state, "today": self.daily_counts().get(n, 0),
+                           "error": info.get("error"), "error_at": info.get("error_at"), "ok_at": info.get("ok_at")})
         return {**self.status, "chain": names, "available": avail, "main_out": main_out,
-                "daily_counts": self.daily_counts()}
+                "daily_counts": self.daily_counts(), "models": models}
+
+    def log(self, line):
+        if not self.log_path:
+            return
+        try:
+            with open(self.log_path, "a", encoding="utf-8") as f:
+                f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + line + "\n")
+        except OSError:
+            pass
 
     def daily_counts(self):
         day = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 8 * 3600))  # Google's day (Pacific)
@@ -135,6 +161,7 @@ class Brain:
                     day = time.strftime("%Y-%m-%d", time.gmtime(time.time() - 8 * 3600))
                     self.counts.setdefault(day, {})
                     self.counts[day][name] = self.counts[day].get(name, 0) + 1
+                    self.per.setdefault(name, {})["ok_at"] = time.strftime("%H:%M")
                     return data
                 except Exception as e:
                     self.note_failure(name, str(e))
@@ -153,6 +180,8 @@ class Brain:
 
     def note_failure(self, name, msg):
         self.status.update(ok=False, error=f"{name}: {msg[:300]}", at=time.strftime("%H:%M:%S"))
+        self.per.setdefault(name, {}).update(error=msg[:400], error_at=time.strftime("%H:%M"))
+        self.log(f"{name} FAILED: {msg[:1500]}")
         self.status["fails"] += 1
         low = msg.lower()
         flat = low.replace(" ", "").replace("_", "")

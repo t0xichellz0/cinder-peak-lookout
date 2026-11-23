@@ -201,6 +201,7 @@ class Game:
         sim = Sim(cfg, os.path.join(SLOTS, slot))
         if self.brain is None:
             self.brain = Brain(cfg)
+            self.brain.log_path = os.path.join(SAVE_ROOT, "brain.log")
         else:
             self.brain.cfg = cfg
         self.stop = threading.Event()

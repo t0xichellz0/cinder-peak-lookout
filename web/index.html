@@ -757,7 +757,16 @@ function toggleFullscreen() {
 window.addEventListener("keydown", e => { if (e.key === "F11" || e.code === "F11") { e.preventDefault(); e.stopPropagation(); toggleFullscreen(); } }, true);
 $("fsBtn").onclick = toggleFullscreen;
 $("brainBtn").onclick = () => { const b = S && S.brain; if (!b) return;
-  toast(`Thinking with: ${(b.model || "nothing yet").replace("gemini:", "")}. ` + (b.error ? "Last error: " + b.error : "No errors.") + "  Order: " + b.chain.map(c => c.replace("gemini:", "")).join(" → "), 15000); };
+  const rows = (b.models || []).map(m => {
+    const col = m.state === "ready" ? "#8fbf6a" : m.state.startsWith("busy") ? "#e0a84a" : "#d9604c";
+    return `<div style="margin:6px 0;padding:6px 8px;border:1px solid var(--line);border-radius:6px">
+      <b>${esc(m.name.replace("gemini:", ""))}</b> <span style="color:${col}">${esc(m.state)}</span>
+      <span class="muted"> · ${m.today} today${m.ok_at ? " · last worked " + m.ok_at : ""}</span>
+      ${m.error ? `<div class="muted" style="font-size:12px;word-break:break-word">${esc(m.error_at || "")} ${esc(m.error.slice(0, 220))}</div>` : ""}</div>`; }).join("");
+  $("mTitle").textContent = "Brain status";
+  $("mBody").innerHTML = rows || "No models configured.";
+  $("mReset").textContent = "Free Gemini limits reset around 10:00 Latvian time. Full error log: save/brain.log";
+  modalOpen = true; $("modalBg").style.display = "flex"; };
 
 // ---------- brain-limit warnings ----------
 const RANK = {none: 0, full: 0, backup: 1, autopilot: 2};
