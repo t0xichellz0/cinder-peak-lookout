@@ -162,6 +162,7 @@
   <span class="wx" id="wx"></span>
   <span class="spacer"></span>
   <div class="btns" id="speeds"></div>
+  <button id="fsBtn" title="Fullscreen (F11)">⛶</button>
   <button class="brainbtn" id="brainBtn" title="Click for details"><span class="dot" id="bdot"></span><span id="btext">--</span></button>
 </header>
 <main>
@@ -614,6 +615,13 @@ function renderHeader() {
   $("bdot").style.background = st[1]; $("btext").textContent = st[0];
 }
 window.speed = v => post("/api/speed", {speed: v}).then(poll);
+function toggleFullscreen() {
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.fullscreen) { window.pywebview.api.fullscreen(); return; }
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+  else document.exitFullscreen();
+}
+window.addEventListener("keydown", e => { if (e.key === "F11" || e.code === "F11") { e.preventDefault(); e.stopPropagation(); toggleFullscreen(); } }, true);
+$("fsBtn").onclick = toggleFullscreen;
 $("brainBtn").onclick = () => { const b = S && S.brain; if (!b) return;
   toast(`Thinking with: ${(b.model || "nothing yet").replace("gemini:", "")}. ` + (b.error ? "Last error: " + b.error : "No errors.") + "  Order: " + b.chain.map(c => c.replace("gemini:", "")).join(" → "), 15000); };
 

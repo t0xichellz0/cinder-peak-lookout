@@ -606,14 +606,6 @@ export function flyTo(where) {
 }
 
 // ---------- setup ----------
-document.addEventListener("keydown", e => {
-  if (e.key !== "F11") return;
-  e.preventDefault();
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.fullscreen) window.pywebview.api.fullscreen();
-  else if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-  else document.exitFullscreen();
-});
-
 export function init(container) {
   const MAP = window.__MAP; tiles = MAP.tiles; elev = MAP.elev; H = tiles.length; W = tiles[0].length;
   // water level: just below the lowest shore around the lake

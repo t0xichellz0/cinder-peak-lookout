@@ -143,14 +143,15 @@ def main():
         try:
             import webview
 
-            class Api:  # lets the page toggle fullscreen with F11
-                win = None
+            WIN = []
 
+            class Api:  # lets the page toggle fullscreen (F11 or the button); only methods, no attributes
                 def fullscreen(self):
-                    if Api.win:
-                        Api.win.toggle_fullscreen()
-            Api.win = webview.create_window(title, url, width=1600, height=950, min_size=(1100, 700),
-                                            background_color="#15130f", js_api=Api())
+                    if WIN:
+                        WIN[0].toggle_fullscreen()
+                    return True
+            WIN.append(webview.create_window(title, url, width=1600, height=950, min_size=(1100, 700),
+                                             background_color="#15130f", js_api=Api()))
             webview.start(private_mode=False, storage_path=os.path.join(HERE, "save", "webview"))
             shutdown()
             return
