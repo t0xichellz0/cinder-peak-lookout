@@ -192,6 +192,13 @@
   .seg button.on { background: var(--accent); color: #1a1408; font-weight: 600; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   .keys { font-size: 13px; } .keys td { padding: 4px 10px 4px 0; } .keys td:first-child { color: var(--accent); white-space: nowrap; font-family: ui-monospace, Consolas, monospace; }
+  .menu textarea { width: 100%; background: #12100d; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font: inherit; resize: vertical; }
+  .menu input[type=text] { width: 100%; }
+  #mp-new { max-height: 86vh; overflow-y: auto; }
+  .menu-col:has(#mp-new.on) { width: 520px; }
+  .life { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px;
+          background: rgba(42,38,32,.75); border: 1px solid var(--line); border-radius: 8px; }
+  .life b { font: 600 16px Georgia, serif; } .life .muted { font-size: 12px; } .life.cur { border-color: var(--accent); }
   .fps { position: absolute; top: 10px; right: 10px; background: rgba(20,18,14,.75); color: #cfe3a0; font: 12px ui-monospace, Consolas, monospace;
          padding: 3px 8px; border-radius: 4px; display: none; pointer-events: none; }
   @media (max-width: 1000px) { main { grid-template-columns: 1fr; height: auto; } .right { height: 80vh; } }
@@ -218,7 +225,7 @@
         <span class="sep"></span>
         <button id="vForest" class="on">Forest</button>
         <button id="vSummit">Summit</button>
-        <button id="vGod" title="See everything happening, including what he hasn't noticed">God view</button>
+        <button id="vGod" title="See everything happening, including what the lookout hasn't noticed">God view</button>
       </div>
       <div class="popover" id="plant">
         <div class="info" id="plantInfo"></div>
@@ -248,8 +255,8 @@
     <div class="pane on flush" id="p-life"></div>
     <div class="pane" id="p-talk"></div>
     <div class="radio-in" id="talkIn" style="display:none">
-      <div class="chan" id="chan"><button data-c="radio" class="on" title="Talk as dispatch, on the open radio">Radio</button><button data-c="voice" title="Speak inside his head">Voice</button></div>
-      <input type="text" id="talkText" placeholder="Talk to him on the radio as dispatch...">
+      <div class="chan" id="chan"><button data-c="radio" class="on" title="Talk as dispatch, on the open radio">Radio</button><button data-c="voice" title="Speak inside the lookout's head">Voice</button></div>
+      <input type="text" id="talkText" placeholder="Talk on the radio as dispatch...">
       <button id="talkSend">Send</button>
     </div>
     <div class="pane" id="p-journal">
@@ -266,6 +273,8 @@
       <h1 id="menuTitle">Cinder Peak Lookout</h1>
       <div class="sub" id="menuSub"></div>
       <button class="mbtn primary" id="mContinue">Continue</button>
+      <button class="mbtn" data-page="new">New life</button>
+      <button class="mbtn" data-page="load">Load another life</button>
       <button class="mbtn" data-page="settings">Settings</button>
       <button class="mbtn" data-page="controls">Controls</button>
       <button class="mbtn" id="mQuit">Quit</button>
@@ -286,6 +295,29 @@
       <div class="set-row"><span class="label">Pause in menus</span><div class="seg" id="setPause"></div></div>
       <div class="muted" id="setHint" style="margin-top:8px"></div>
       <button class="mbtn" data-page="root" style="margin-top:16px">Back</button>
+    </div>
+    <div class="menu-page" id="mp-new">
+      <h2>A new lookout</h2>
+      <div class="muted" style="margin:-6px 0 10px">Describe a person. Everything else (what they come to love, hate, believe and remember) grows on its own.</div>
+      <div class="set-row"><span class="label">Name</span><input type="text" id="nName" placeholder="e.g. Maren Holt"></div>
+      <div class="set-row"><span class="label">Age</span><input type="text" id="nAge" placeholder="e.g. 34"></div>
+      <div class="set-row"><span class="label">Gender</span><div class="seg" id="nPron"></div></div>
+      <div class="set-row"><span class="label">From</span><input type="text" id="nHome" placeholder="e.g. a fishing town in Maine"></div>
+      <div class="set-row" style="align-items:start"><span class="label">Traits<br><small class="muted">one per line</small></span>
+        <textarea id="nTraits" rows="5" placeholder="analytical&#10;quietly stubborn&#10;afraid of being ordinary"></textarea></div>
+      <div class="set-row" style="align-items:start"><span class="label">Why they're here</span><textarea id="nWhy" rows="3" placeholder="Why did they take a job alone on a mountain?"></textarea></div>
+      <div class="set-row"><span class="label">World</span><div class="seg" id="nMap"></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button class="mbtn" id="nExample" style="flex:1;margin:0">Fill in an example</button>
+        <button class="mbtn primary" id="nStart" style="flex:1;margin:0">Begin</button>
+      </div>
+      <div class="muted" id="nMsg" style="margin-top:8px"></div>
+      <button class="mbtn" data-page="root" style="margin-top:10px">Back</button>
+    </div>
+    <div class="menu-page" id="mp-load">
+      <h2>Lives</h2>
+      <div id="loadList"></div>
+      <button class="mbtn" data-page="root" style="margin-top:14px">Back</button>
     </div>
     <div class="menu-page" id="mp-controls">
       <h2>Controls</h2>
@@ -573,6 +605,11 @@ function render(ts) {
 }
 
 // ---------- panels ----------
+// pronouns for whoever is in the tower this run
+const PRON = {he: {he: "he", He: "He", him: "him", his: "his", His: "His", himself: "himself", hes: "he's", Hes: "He's", hell: "he'll"},
+              she: {he: "she", He: "She", him: "her", his: "her", His: "Her", himself: "herself", hes: "she's", Hes: "She's", hell: "she'll"},
+              they: {he: "they", He: "They", him: "them", his: "their", His: "Their", himself: "themselves", hes: "they're", Hes: "They're", hell: "they'll"}};
+const P = () => PRON[(S && S.character && S.character.pronouns) || "he"] || PRON.he;
 // only touch the page when something actually changed: no flicker, hover and scroll stay put
 function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
 const prioCol = {routine: "#6f6757", urgent: "#c7862e", emergency: "#c0392b"};
@@ -597,7 +634,7 @@ function renderNow() {
 // Life: today's happenings and thoughts in one timeline, or every thought with search
 let thoughts = [], thoughtsAt = 0;
 async function loadThoughts() { thoughts = await (await fetch("/api/thoughts")).json(); thoughtsAt = Date.now(); renderLife(); }
-const thoughtHTML = t => `<div class="th ${t.kind}"><q>${esc(t.text)}</q><div class="meta">${hhmm(t.t)} · ${t.kind === "reaction" ? "reacting to something he heard" : esc((t.doing || "").replace(/_/g, " "))}</div></div>`;
+const thoughtHTML = t => `<div class="th ${t.kind}"><q>${esc(t.text)}</q><div class="meta">${hhmm(t.t)} · ${t.kind === "reaction" ? "reacting to something " + P().he + " heard" : esc((t.doing || "").replace(/_/g, " "))}</div></div>`;
 function renderLife() {
   const el = $("p-life");
   if (lifeMode === "today") {
@@ -617,7 +654,7 @@ function renderLife() {
     out += thoughtHTML(t);
   }
   const keep = $("thSearch") ? $("thSearch").value : "";
-  el.innerHTML = `<input type="text" id="thSearch" placeholder="Search all his thoughts..." style="width:100%;margin:4px 0 6px" value="${esc(keep)}">` +
+  el.innerHTML = `<input type="text" id="thSearch" placeholder="Search all ${P().his} thoughts..." style="width:100%;margin:4px 0 6px" value="${esc(keep)}">` +
     (out || `<div class="muted">No thoughts found.</div>`);
   const inp = $("thSearch"); inp.oninput = renderLife;
   if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
@@ -641,10 +678,10 @@ function renderTalk() {
   }
   for (const v of S.voice) items.push({t: v.t + 0.01, html: v.from === "voice"
     ? `<div class="msg voice"><div class="who">You, as the voice · D${day(v.t)} ${hhmm(v.t)}${v.dream ? " · in a dream" : ""}</div>${esc(v.text)}</div>`
-    : `<div class="msg inner"><div class="who">${esc(name)}, in his head · D${day(v.t)} ${hhmm(v.t)}</div>${esc(v.text)}</div>`});
+    : `<div class="msg inner"><div class="who">${esc(name)}, in ${P().his} head · D${day(v.t)} ${hhmm(v.t)}</div>${esc(v.text)}</div>`});
   items.sort((p, q) => p.t - q.t);
-  const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? "He's asleep; he'll hear the voice in a dream." : "He's hearing it..."}</div>` : "";
-  setHTML(el, (items.map(i => i.html).join("") || `<div class="muted">Nothing said yet. Use Radio to talk as dispatch, or Voice to speak inside his head.</div>`) + pend);
+  const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? `${P().Hes} asleep; ${P().hell} hear the voice in a dream.` : `${P().Hes} hearing it...`}</div>` : "";
+  setHTML(el, (items.map(i => i.html).join("") || `<div class="muted">Nothing said yet. Use Radio to talk as dispatch, or Voice to speak inside ${P().his} head.</div>`) + pend);
   const len = S.radio.length + S.voice.length;
   if (stick || lastTalkLen !== len) el.scrollTop = el.scrollHeight;
   lastTalkLen = len;
@@ -672,7 +709,7 @@ function renderJournal() {
   const d = diary[diarySel];
   setHTML(el, `<div class="days">${diary.map((e, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${e.day + 1}<br>${esc(e.date)}${e.year ? ", Y" + e.year : ""}</div>`).reverse().join("")}</div>` +
     `<div class="page">${d ? `<h3>Day ${d.day + 1} · ${esc(d.date)}${d.year ? ", Year " + d.year : ""}</h3>${esc(d.text)}${d.tomorrow ? `<div class="tmr">Tomorrow: ${esc(d.tomorrow)}</div>` : ""}`
-                         : `<span class="muted">No entries yet. He writes before bed.</span>`}</div>`);
+                         : `<span class="muted">No entries yet. ${P().He} ${P().he === "they" ? "write" : "writes"} before bed.</span>`}</div>`);
 }
 window.pickDay = i => { diarySel = i; renderJournal(); };
 
@@ -688,11 +725,11 @@ function renderMind() {
   const fx = S.fixables || [];
   setHTML($("p-mind"),
     `<h4>Likes and dislikes</h4>${feel}` +
-    `<h4>What he's concluded</h4>${list(S.beliefs, b => `<li>${esc(b)}</li>`, "Nothing concluded yet.")}` +
-    `<h4>Facts about his life</h4>${list(S.self_facts || [], f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`, "Nothing established yet. Ask him about his past.")}` +
+    `<h4>What ${P().hes} concluded</h4>${list(S.beliefs, b => `<li>${esc(b)}</li>`, "Nothing concluded yet.")}` +
+    `<h4>Facts about ${P().his} life</h4>${list(S.self_facts || [], f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`, `Nothing established yet. Ask ${P().him} about ${P().his} past.`)}` +
     `<h4>Side projects</h4>${list(S.projects, p => `<li><b>${esc(p.name)}</b> <span class="muted">${p.status}, ${p.sessions} sessions</span><br>${esc(p.notes[p.notes.length - 1] || "")}</li>`, "No side projects yet.")}` +
     `<h4>Repairs</h4>${list(fx, f => `<li>${esc(f.name)} <span class="muted">${f.broken ? (f.times_fixed ? "broken again" : "broken") + (f.attempts ? `, ${f.attempts} failed tr${f.attempts > 1 ? "ies" : "y"}` : "") : "fixed on day " + (f.fixed_day + 1)}</span></li>`, "Nothing noticed yet.")}` +
-    `<h4>His things</h4>${list(S.inventory, i => `<li>${esc(i)}</li>`, "")}` +
+    `<h4>${P().His} things</h4>${list(S.inventory, i => `<li>${esc(i)}</li>`, "")}` +
     `<h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot: ${S.stats.offline_calls} · today: ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none"}</div>`);
 }
 
@@ -740,10 +777,10 @@ function checkBrain() {
     modalOpen = true;
     if (b.tier === "backup") {
       $("mTitle").textContent = `${name} has hit today's limit`;
-      $("mBody").textContent = `His sharpest brain is used up for today. He's now thinking with a backup (${(b.model || "").replace("gemini:", "")}). He's still himself, since his memories, diary and opinions are all saved, but he'll be a bit duller and slower until it resets.`;
+      $("mBody").textContent = `${P().His} sharpest brain is used up for today. ${P().Hes} now thinking with a backup (${(b.model || "").replace("gemini:", "")}). ${P().Hes} still ${P().himself}, since ${P().his} memories, diary and opinions are all saved, but ${P().hell} be a bit duller and slower until it resets.`;
     } else {
       $("mTitle").textContent = `${name} is brain dead`;
-      $("mBody").textContent = `Every model has hit its limit or isn't answering. The world keeps running and he keeps to simple routines (scanning, eating, sleeping), but he can't really think, talk back or write in his diary until a brain comes back. You can keep going, or pause the world until then.`;
+      $("mBody").textContent = `Every model has hit its limit or isn't answering. The world keeps running and ${P().he} ${P().he === "they" ? "keep" : "keeps"} to simple routines (scanning, eating, sleeping), but ${P().he} can't really think, talk back or write in ${P().his} diary until a brain comes back. You can keep going, or pause the world until then.`;
     }
     $("mReset").textContent = resetText(b);
     $("modalBg").style.display = "flex";
@@ -850,10 +887,62 @@ function closeMenu() {
 function showPage(p) {
   document.querySelectorAll(".menu-page").forEach(el => el.classList.toggle("on", el.id === "mp-" + p));
   if (p === "settings") buildSettings();
+  if (p === "new") buildNew();
+  if (p === "load") buildLoad();
 }
 $("menu").addEventListener("click", e => { const p = e.target.dataset.page; if (p) showPage(p); });
 $("mContinue").onclick = closeMenu;
 $("mQuit").onclick = () => { if (window.pywebview && window.pywebview.api.quit) window.pywebview.api.quit(); };
+
+
+// ---------- new life / load ----------
+let newPron = "he", newMap = "same";
+const EXAMPLES = [
+  {name: "Maren Holt", age: "34", pron: "she", home: "a fishing town on the coast of Maine",
+   traits: "quietly stubborn\nfunny in a dry way, mostly to herself\ndistrusts anyone who talks too much\ngrieving something she won't name",
+   why: "She left a marriage and a city job in the same month and wanted somewhere nobody would ask how she was doing."},
+  {name: "Tomas Vilks", age: "61", pron: "he", home: "a village near Kuldiga, Latvia, by way of thirty years in Chicago",
+   traits: "patient\nsuperstitious about weather\na retired schoolteacher who still corrects grammar\nlonely but would never say so",
+   why: "His wife died two winters ago. A cousin in Montana mentioned the job and he said yes before he could think."},
+  {name: "Sam Okafor", age: "22", pron: "they", home: "the suburbs of Sacramento",
+   traits: "restless\nobsessed with birds and lists\nanxious in crowds, brave alone\nwants badly to be good at something",
+   why: "They failed out of a biology degree and want one summer to prove they can see a thing through."},
+];
+function buildNew() {
+  seg("nPron", [["he", "Man"], ["she", "Woman"], ["they", "Non-binary"]], () => newPron, v => newPron = v);
+  seg("nMap", [["same", "Same mountain"], ["new", "A new mountain"]], () => newMap, v => newMap = v);
+  $("nMsg").textContent = "";
+}
+$("nExample").onclick = () => {
+  const e = EXAMPLES[Math.floor(Math.random() * EXAMPLES.length)];
+  $("nName").value = e.name; $("nAge").value = e.age; $("nHome").value = e.home; $("nTraits").value = e.traits; $("nWhy").value = e.why;
+  newPron = e.pron; $("nPron")._sync();
+};
+$("nStart").onclick = async () => {
+  const name = $("nName").value.trim();
+  if (!name) { $("nMsg").textContent = "They need a name."; return; }
+  $("nMsg").textContent = "Building their world...";
+  const character = { name, short_name: name.split(/\s+/)[0], age: $("nAge").value.trim() || "30", pronouns: newPron,
+    hometown: $("nHome").value.trim() || "somewhere far from here", traits: $("nTraits").value,
+    why_here: $("nWhy").value.trim() || "They needed to be somewhere quiet for a while." };
+  if (!$("nTraits").value.trim()) character.traits = "observant\nprivate";
+  const r = await post("/api/new", {character, new_map: newMap === "new"});
+  if (!r.ok) { $("nMsg").textContent = "Something went wrong creating them."; return; }
+  try { sessionStorage.setItem("skipMenu", "1"); } catch (e) {}
+  location.reload();
+};
+async function buildLoad() {
+  const d = await (await fetch("/api/saves")).json();
+  $("loadList").innerHTML = d.saves.map(x => `<div class="life ${x.slot === d.active ? "cur" : ""}">
+      <div><b>${esc(x.name)}</b><div class="muted">Day ${x.day} · ${esc(x.date)}, Year ${x.year} · ${x.diary} diary entries</div></div>
+      ${x.slot === d.active ? `<span class="muted">playing</span>` : `<button class="mbtn" style="width:auto;margin:0" onclick="loadLife('${x.slot}')">Load</button>`}
+    </div>`).join("") || `<div class="muted">No saved lives yet.</div>`;
+}
+window.loadLife = async slot => {
+  await post("/api/load", {slot});
+  try { sessionStorage.setItem("skipMenu", "1"); } catch (e) {}
+  location.reload();
+};
 
 // ---------- keyboard ----------
 window.addEventListener("keydown", e => {
@@ -894,7 +983,7 @@ $("journalBar").onclick = e => { const m = e.target.dataset.m; if (!m) return; j
   $("journalBar").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.m === m)); renderJournal(); };
 $("chan").onclick = e => { const c = e.target.dataset.c; if (!c) return; talkCh = c;
   $("chan").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.c === c));
-  $("talkText").placeholder = c === "radio" ? "Talk to him on the radio as dispatch..." : "Speak inside his head...";
+  $("talkText").placeholder = c === "radio" ? `Talk to ${P().him} on the radio as dispatch...` : `Speak inside ${P().his} head...`;
   $("talkSend").textContent = c === "radio" ? "Send" : "Whisper"; $("talkText").focus(); };
 $("talkSend").onclick = sendTalk;
 $("talkText").onkeydown = e => { if (e.key === "Enter") sendTalk(); };
@@ -960,7 +1049,8 @@ $("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); 
     console.error("3D view unavailable:", err); setMode("2d"); $("v3d").style.display = "none";
   }
   moveInk();
-  openMenu("main");
+  let skip = false; try { skip = sessionStorage.getItem("skipMenu") === "1"; sessionStorage.removeItem("skipMenu"); } catch (e) {}
+  if (!skip) openMenu("main");
   setInterval(poll, 800);
   requestAnimationFrame(render);
 })();

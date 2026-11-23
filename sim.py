@@ -28,6 +28,17 @@ WINDOWS = {
 COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
 
 
+PRONOUNS = {
+    "he": dict(he="he", He="He", him="him", his="his", His="His", himself="himself", he_s="he's", gets="gets"),
+    "she": dict(he="she", He="She", him="her", his="her", His="Her", himself="herself", he_s="she's", gets="gets"),
+    "they": dict(he="they", He="They", him="them", his="their", His="Their", himself="themselves", he_s="they're", gets="get"),
+}
+
+
+def pronoun_fields(ch):
+    return PRONOUNS.get(str(ch.get("pronouns", "he")).lower(), PRONOUNS["he"])
+
+
 class SafeDict(dict):
     def __missing__(self, k):
         return "{" + k + "}"
@@ -233,6 +244,11 @@ class Sim:
             self.s.setdefault("voice", [])
             self.s.setdefault("voice_in", [])
             self.s.setdefault("memories", [])
+            if "character" in self.s:
+                self.cfg["character"] = self.s["character"]
+            else:
+                self.s["character"] = self.cfg["character"]
+            self.s.setdefault("seed", self.cfg.get("world_seed", 4127))
             self.s.setdefault("thoughts", [])
             self.s.setdefault("self_facts", [])
             self.merge_ledger()
@@ -269,6 +285,7 @@ class Sim:
         p = self.cfg["place"]
         ch = self.cfg["character"]
         f = SafeDict(p)
+        f.update(pronoun_fields(ch))
         f.update(name=ch["name"], short_name=ch["short_name"],
                  other_lookout=self.rng.choice(C.OTHER_LOOKOUTS), lake_mi=self.lake_mi)
         f.update(C.REGULARS)
@@ -358,6 +375,7 @@ class Sim:
         start = 6 * 60 + 30
         s = {
             "version": 1, "minute": start, "map": m, "ids": {},
+            "character": self.cfg["character"], "seed": self.cfg.get("world_seed", 4127),
             "weather_day": None, "dryness": 0.55, "speed": self.cfg.get("default_speed", 1),
             "agent": {
                 "pos": [tx + 0.5, ty + 0.35], "loc": "tower_cab", "activity": "think", "arg": "",
@@ -1150,7 +1168,8 @@ class Sim:
     def identity(self):
         ch, p = self.cfg["character"], self.cfg["place"]
         traits = "\n".join(f"- {t}" for t in ch["traits"])
-        return f"""You are {ch['name']}, {ch['age']}, from {ch['hometown']}.
+        who = {"she": "a woman", "they": "a person", "he": "a man"}.get(str(ch.get("pronouns", "he")).lower(), "a person")
+        return f"""You are {ch['name']}, {who} of {ch['age']}, from {ch['hometown']}.
 Temperament:
 {traits}
 Why you're here: {ch['why_here']}

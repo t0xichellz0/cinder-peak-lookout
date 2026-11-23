@@ -109,7 +109,126 @@ def run_world(sim, brain, stop):
             last_save = time.time()
 
 
-def make_handler(sim, brain):
+SAVE_ROOT = os.path.join(HERE, "save")
+SLOTS = os.path.join(SAVE_ROOT, "slots")
+
+
+def slugify(name):
+    out = "".join(c.lower() if c.isalnum() else "-" for c in str(name)).strip("-")
+    while "--" in out:
+        out = out.replace("--", "-")
+    return out[:40] or "lookout"
+
+
+class Game:
+    """Holds the running world. Several saved lives ("slots") can exist; one runs at a time."""
+
+    def __init__(self):
+        self.sim = self.brain = self.stop = self.thread = None
+        self.slot = None
+        os.makedirs(SLOTS, exist_ok=True)
+        self.migrate_old_save()
+
+    def migrate_old_save(self):
+        """Older versions kept one world in save/. Move it into its own slot, after a backup copy."""
+        old = os.path.join(SAVE_ROOT, "world.json")
+        if not os.path.exists(old):
+            return
+        import shutil
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        backup = os.path.join(SAVE_ROOT, f"backup-{stamp}")
+        os.makedirs(backup, exist_ok=True)
+        for f in ("world.json", "diary.md"):
+            if os.path.exists(os.path.join(SAVE_ROOT, f)):
+                shutil.copy2(os.path.join(SAVE_ROOT, f), backup)
+        try:
+            with open(old, encoding="utf-8") as fh:
+                name = (json.load(fh).get("character") or load_config()["character"])["name"]
+        except Exception:
+            name = "lookout"
+        dest = os.path.join(SLOTS, slugify(name))
+        os.makedirs(dest, exist_ok=True)
+        for f in ("world.json", "diary.md"):
+            if os.path.exists(os.path.join(SAVE_ROOT, f)):
+                shutil.move(os.path.join(SAVE_ROOT, f), os.path.join(dest, f))
+        self.set_active(slugify(name))
+        print(f"  Moved your existing save into slot '{slugify(name)}' (backup in {backup}).")
+
+    def active(self):
+        try:
+            with open(os.path.join(SAVE_ROOT, "active.txt"), encoding="utf-8") as f:
+                a = f.read().strip()
+            if a and os.path.isdir(os.path.join(SLOTS, a)):
+                return a
+        except OSError:
+            pass
+        slots = self.list_slots()
+        return slots[0]["slot"] if slots else None
+
+    def set_active(self, slot):
+        with open(os.path.join(SAVE_ROOT, "active.txt"), "w", encoding="utf-8") as f:
+            f.write(slot)
+
+    def list_slots(self):
+        out = []
+        for d in os.listdir(SLOTS):
+            wf = os.path.join(SLOTS, d, "world.json")
+            if not os.path.exists(wf):
+                continue
+            try:
+                with open(wf, encoding="utf-8") as fh:
+                    w = json.load(fh)
+                from sim import date_str, year_of
+                day = int(w["minute"] // 1440)
+                ch = w.get("character") or {}
+                out.append({"slot": d, "name": ch.get("name", d), "pronouns": ch.get("pronouns", "he"),
+                            "day": day + 1, "date": date_str(day), "year": year_of(day),
+                            "diary": len(w.get("diary", [])), "modified": os.path.getmtime(wf)})
+            except Exception:
+                continue
+        return sorted(out, key=lambda x: -x["modified"])
+
+    def stop_world(self):
+        if self.sim:
+            self.stop.set()
+            if self.thread:
+                self.thread.join(timeout=5)
+            self.sim.save()
+
+    def load(self, slot, cfg=None):
+        self.stop_world()
+        cfg = cfg or load_config()
+        sim = Sim(cfg, os.path.join(SLOTS, slot))
+        if self.brain is None:
+            self.brain = Brain(cfg)
+        else:
+            self.brain.cfg = cfg
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=run_world, args=(sim, self.brain, self.stop), daemon=True)
+        self.sim, self.slot = sim, slot
+        self.thread.start()
+        self.set_active(slot)
+
+    def new(self, character, new_map=False):
+        cfg = load_config()
+        ch = dict(cfg["character"])
+        ch.update({k: v for k, v in character.items() if v not in (None, "", [])})
+        ch["short_name"] = ch.get("short_name") or str(ch["name"]).split()[0]
+        cfg["character"] = ch
+        if new_map:
+            import random
+            cfg["world_seed"] = random.randint(1, 10 ** 6)
+        base = slugify(ch["name"])
+        slot, i = base, 2
+        while os.path.exists(os.path.join(SLOTS, slot)):
+            slot, i = f"{base}-{i}", i + 1
+        os.makedirs(os.path.join(SLOTS, slot), exist_ok=True)
+        self.load(slot, cfg)
+        self.sim.save()
+        return slot
+
+
+def make_handler(G):
     web = os.path.join(HERE, "web")
 
     class H(BaseHTTPRequestHandler):
@@ -131,23 +250,27 @@ def make_handler(sim, brain):
             if p in ("/", "/index.html"):
                 with open(os.path.join(web, "index.html"), "rb") as f:
                     return self.send(200, f.read(), "text/html")
+            if p.endswith(".js") or p.startswith("/vendor/"):
+                full = os.path.normpath(os.path.join(web, p.lstrip("/")))
+                if full.startswith(os.path.normpath(web)) and os.path.isfile(full):
+                    with open(full, "rb") as f:
+                        return self.send(200, f.read(), "text/javascript")
+            if p == "/api/saves":
+                return self.send(200, {"active": G.slot, "saves": G.list_slots()})
+            sim = G.sim
             if p == "/api/state":
                 with sim.lock:
                     snap = sim.snapshot()
-                snap["brain"] = brain.describe()
+                snap["brain"] = G.brain.describe()
+                snap["slot"] = G.slot
                 return self.send(200, snap)
             if p == "/api/map":
                 with sim.lock:
                     elev = sim.map.get("elev")
                     if not elev:  # older saves: rebuild the same elevation from the world seed
                         from sim import gen_map
-                        elev = sim.map["elev"] = gen_map(sim.cfg.get("world_seed", 4127))["elev"]
+                        elev = sim.map["elev"] = gen_map(sim.s.get("seed", sim.cfg.get("world_seed", 4127)))["elev"]
                     return self.send(200, {"tiles": sim.map["tiles"], "tower": sim.map["tower"], "elev": elev})
-            if p.endswith(".js") or p.startswith("/vendor/"):
-                full = os.path.normpath(os.path.join(web, p.lstrip("/")))
-                if full.startswith(os.path.normpath(web)) and os.path.isfile(full):
-                    with open(full, "rb") as f:
-                        return self.send(200, f.read(), "text/javascript")
             if p == "/api/thoughts":
                 with sim.lock:
                     return self.send(200, sim.s.get("thoughts", []))
@@ -163,6 +286,22 @@ def make_handler(sim, brain):
             except json.JSONDecodeError:
                 body = {}
             p = self.path
+            if p == "/api/new":
+                ch = body.get("character") or {}
+                if not str(ch.get("name", "")).strip():
+                    return self.send(400, {"error": "a name is required"})
+                traits = ch.get("traits")
+                if isinstance(traits, str):
+                    ch["traits"] = [t.strip("-• ").strip() for t in traits.splitlines() if t.strip()]
+                slot = G.new(ch, new_map=bool(body.get("new_map")))
+                return self.send(200, {"ok": True, "slot": slot})
+            if p == "/api/load":
+                slot = str(body.get("slot", ""))
+                if not os.path.isdir(os.path.join(SLOTS, slot)):
+                    return self.send(404, {"error": "no such save"})
+                G.load(slot)
+                return self.send(200, {"ok": True})
+            sim = G.sim
             with sim.lock:
                 if p == "/api/speed":
                     sim.s["speed"] = max(0, min(120, float(body.get("speed", 1))))
@@ -193,30 +332,30 @@ LAST_REQUEST = [time.time()]
 def start(open_browser=False):
     """Start the world and the web server in the background. Returns (url, cfg, shutdown)."""
     cfg = load_config()
-    sim = Sim(cfg, os.path.join(HERE, "save"))
-    brain = Brain(cfg)
-    stop = threading.Event()
-    threading.Thread(target=run_world, args=(sim, brain, stop), daemon=True).start()
+    G = Game()
+    slot = G.active()
+    if slot:
+        G.load(slot)
+    else:
+        G.new(cfg["character"])  # first ever run: start with the character from config.json
     port = int(cfg["port"])
     server = None
     for p in range(port, port + 10):
         try:
-            server = ThreadingHTTPServer(("127.0.0.1", p), make_handler(sim, brain))
+            server = ThreadingHTTPServer(("127.0.0.1", p), make_handler(G))
             port = p
             break
         except OSError:
             continue
     threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://localhost:{port}"
-    print(f"  {cfg['place']['lookout']} is running at {url}")
-    print(f"  Brain: {', '.join(brain.describe()['chain']) or 'NONE (autopilot only) - check config.json'}")
+    print(f"  {cfg['place']['lookout']} is running at {url} ({G.slot})")
+    print(f"  Brain: {', '.join(G.brain.describe()['chain']) or 'NONE (autopilot only) - check config.json'}")
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     def shutdown():
-        stop.set()
-        time.sleep(0.3)
-        sim.save()
+        G.stop_world()
         server.shutdown()
         print("  Saved. Goodbye.")
     return url, cfg, shutdown
