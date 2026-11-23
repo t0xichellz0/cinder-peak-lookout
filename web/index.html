@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lookout</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #15130f; --panel: #1f1c17; --panel2: #2a2620; --line: #3a342b;
+    --ink: #e9e2d3; --dim: #a39a88; --faint: #6f6757;
+    --accent: #e0a045; --green: #8fb36a; --red: #d9634c; --blue: #7fb0d0;
+    --paper: #f1e8d4; --paper-ink: #2c2418;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 18px; padding: 10px 18px; border-bottom: 1px solid var(--line);
+           background: #1a1814; flex-wrap: wrap; }
+  header h1 { font: 600 17px Georgia, serif; margin: 0; letter-spacing: .3px; }
+  .clock { font: 600 15px ui-monospace, Consolas, monospace; color: var(--accent); }
+  .wx { color: var(--dim); }
+  .danger { padding: 2px 8px; border-radius: 3px; font-weight: 600; font-size: 12px; }
+  .spacer { flex: 1; }
+  .btns { display: flex; gap: 4px; }
+  button { background: var(--panel2); color: var(--ink); border: 1px solid var(--line); border-radius: 4px;
+           padding: 4px 10px; cursor: pointer; font: inherit; font-size: 13px; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #1a1408; border-color: var(--accent); font-weight: 600; }
+  .brain { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; max-width: 210px; white-space: nowrap; overflow: hidden; }
+  .brain span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); flex: none; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 14px; padding: 14px; height: calc(100vh - 56px); }
+  .left { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow-y: auto; }
+  .mapwrap { position: relative; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; cursor: crosshair; }
+  .maptools { position: absolute; top: 8px; left: 8px; display: flex; gap: 4px; }
+  .maptools button { background: rgba(20,18,14,.8); }
+  .maptools button.on { background: var(--accent); color: #1a1408; }
+  .legend { position: absolute; bottom: 8px; left: 8px; background: rgba(20,18,14,.8); padding: 4px 8px; border-radius: 4px;
+            font-size: 11px; color: var(--dim); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; }
+  .now-title { font: 600 16px Georgia, serif; }
+  .now-sub { color: var(--dim); font-size: 13px; }
+  .thought { font: italic 15px Georgia, serif; color: #d8cdb4; margin: 8px 0 4px; }
+  .thinking { color: var(--accent); font-size: 12px; min-height: 18px; }
+  .needs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px; }
+  .need label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .5px; }
+  .bar { height: 6px; background: #000; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+  .bar i { display: block; height: 100%; }
+  .plant { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .plant input { flex: 1; min-width: 200px; }
+  input[type=text] { background: #12100d; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px; font: inherit; }
+  .right { display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .tabs button { flex: 1; border: 0; border-radius: 0; background: transparent; padding: 10px 4px; color: var(--dim); }
+  .tabs button.on { color: var(--accent); background: transparent; border-bottom: 2px solid var(--accent); font-weight: 600; }
+  .pane { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 12px 14px; }
+  .pane.on { display: block; }
+  .feed div { padding: 5px 0; border-bottom: 1px solid #2c2822; }
+  .feed .t { color: var(--faint); font: 12px ui-monospace, Consolas, monospace; margin-right: 6px; }
+  .k-sighting { color: #f0c36a; } .k-radio { color: var(--blue); } .k-event { color: #e8b0e0; }
+  .k-weather { color: #a9c6e8; } .k-activity { color: var(--dim); font-style: italic; } .k-project { color: var(--green); }
+  .msg { margin: 0 0 10px; padding: 8px 10px; border-radius: 6px; background: var(--panel2); }
+  .msg .who { font-size: 12px; font-weight: 600; }
+  .msg.julian { border-left: 3px solid var(--accent); } .msg.julian .who { color: var(--accent); }
+  .msg.you { border-left: 3px solid var(--blue); } .msg.you .who { color: var(--blue); }
+  .msg.voice { border-left: 3px solid #b08fd0; font-style: italic; } .msg.voice .who { color: #b08fd0; }
+  .msg.inner { border-left: 3px solid var(--accent); font-family: Georgia, serif; } .msg.inner .who { color: var(--accent); }
+  .th { padding: 7px 0; border-bottom: 1px solid #2c2822; }
+  .th q { font: italic 14px/1.5 Georgia, serif; color: #e2d8c2; display: block; quotes: "\201C" "\201D"; }
+  .th .meta { font-size: 11px; color: var(--faint); }
+  .th.reaction q { color: #c9b8e6; }
+  .dayhead { margin: 14px 0 4px; font: 600 12px system-ui; color: var(--accent); text-transform: uppercase; letter-spacing: .6px; }
+  .k-voice { color: #c9a8e8; font-style: italic; }
+  .msg.relay .who, .msg.auto .who, .msg.base .who { color: var(--dim); }
+  .msg .acts { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+  .msg .acts button { font-size: 12px; padding: 3px 8px; }
+  .prio { font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; }
+  .radio-in { display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .radio-in input { flex: 1; }
+  .diary { display: grid; grid-template-columns: 110px 1fr; gap: 10px; height: 100%; }
+  .days { overflow-y: auto; border-right: 1px solid var(--line); padding-right: 6px; }
+  .days div { padding: 5px 6px; border-radius: 4px; cursor: pointer; font-size: 12px; color: var(--dim); }
+  .days div.on, .days div:hover { background: var(--panel2); color: var(--ink); }
+  .page { background: var(--paper); color: var(--paper-ink); border-radius: 4px; padding: 18px 20px; overflow-y: auto;
+          font: 15px/1.6 Georgia, "Times New Roman", serif; white-space: pre-wrap; box-shadow: inset 0 0 40px rgba(120,90,40,.25); }
+  .page h3 { margin: 0 0 10px; font: italic 600 15px Georgia, serif; color: #6b5536; }
+  .page .tmr { margin-top: 14px; font-style: italic; color: #6b5536; font-size: 13px; }
+  .log div { font: 12px/1.5 ui-monospace, Consolas, monospace; padding: 3px 0; border-bottom: 1px solid #2c2822; color: #cfc6b2; }
+  h4 { margin: 14px 0 6px; font: 600 12px system-ui; text-transform: uppercase; letter-spacing: .8px; color: var(--accent); }
+  h4:first-child { margin-top: 0; }
+  .feel { display: grid; grid-template-columns: 1fr 90px; gap: 8px; padding: 4px 0; border-bottom: 1px solid #2c2822; font-size: 13px; }
+  .feel small { display: block; color: var(--faint); font-size: 11px; }
+  .fbar { position: relative; height: 6px; background: #000; border-radius: 3px; margin-top: 7px; }
+  .fbar i { position: absolute; top: 0; height: 100%; border-radius: 3px; }
+  .fbar:after { content: ""; position: absolute; left: 50%; top: -2px; width: 1px; height: 10px; background: var(--faint); }
+  ul.plain { margin: 0; padding-left: 18px; } ul.plain li { margin: 3px 0; }
+  .muted { color: var(--faint); font-style: italic; }
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 22px 24px; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .modal h2 { margin: 0 0 10px; font: 600 19px Georgia, serif; }
+  .modal p { margin: 0 0 12px; color: #d8cfbd; }
+  .modal .row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .tier { font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 600; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: #2f4a2c; color: #e9f2de; padding: 10px 16px;
+           border-radius: 6px; display: none; z-index: 11; box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; height: auto; } .right { height: 80vh; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Lookout</h1>
+  <span class="clock" id="clock">--</span>
+  <span class="wx" id="wx"></span>
+  <span class="danger" id="danger"></span>
+  <span class="spacer"></span>
+  <div class="btns" id="speeds"></div>
+  <span class="tier" id="tierBadge" style="display:none"></span>
+  <div class="brain"><span class="dot" id="bdot"></span><span id="btext">brain: --</span></div>
+</header>
+<main>
+  <div class="left">
+    <div class="mapwrap">
+      <canvas id="cv" width="1024" height="640"></canvas>
+      <div class="maptools">
+        <button id="vForest" class="on">Forest</button>
+        <button id="vSummit">Summit</button>
+        <button id="vGod" title="Show everything happening, including what he hasn't noticed">God view</button>
+      </div>
+      <div class="legend" id="legend">Click the map to leave something for him to find.</div>
+    </div>
+    <div class="card plant" id="plant">
+      <span id="plantInfo"></span>
+      <input type="text" id="plantText" placeholder="Leave something here (e.g. a red scarf tied to a branch)">
+      <button id="plantBtn">Leave it</button>
+      <button id="plantX">Cancel</button>
+    </div>
+    <div class="card">
+      <div class="now-title" id="nowTitle">--</div>
+      <div class="now-sub" id="nowSub"></div>
+      <div class="thought" id="thought"></div>
+      <div class="thinking" id="thinking"></div>
+      <div class="needs" id="needs"></div>
+    </div>
+  </div>
+  <div class="right">
+    <div class="tabs" id="tabs">
+      <button data-p="today" class="on">Today</button>
+      <button data-p="radio">Radio</button>
+      <button data-p="voice">Voice</button>
+      <button data-p="thoughts">Thoughts</button>
+      <button data-p="diary">Diary</button>
+      <button data-p="log">Logbook</button>
+      <button data-p="mind">Mind</button>
+    </div>
+    <div class="pane on feed" id="p-today"></div>
+    <div class="pane" id="p-radio"></div>
+    <div class="radio-in" id="radioIn" style="display:none">
+      <input type="text" id="radioText" placeholder="Talk to him on the radio as dispatch...">
+      <button id="radioSend">Send</button>
+    </div>
+    <div class="pane" id="p-voice"></div>
+    <div class="radio-in" id="voiceIn" style="display:none">
+      <input type="text" id="voiceText" placeholder="Speak inside his head...">
+      <button id="voiceSend">Whisper</button>
+    </div>
+    <div class="pane" id="p-diary"><div class="diary"><div class="days" id="days"></div><div class="page" id="page"><span class="muted">No entries yet. He writes before bed.</span></div></div></div>
+    <div class="pane" id="p-thoughts"></div>
+    <div class="pane log" id="p-log"></div>
+    <div class="pane" id="p-mind"></div>
+  </div>
+</main>
+
+<div class="modal-bg" id="modalBg"><div class="modal">
+  <h2 id="mTitle"></h2><p id="mBody"></p><p id="mReset" class="muted"></p>
+  <div class="row"><button id="mPause">Pause the world</button><button id="mGo" class="on">Keep going</button></div>
+</div></div>
+<div class="toast" id="toast"></div>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hhmm = m => { m = ((m % 1440) + 1440) % 1440; return String(Math.floor(m/60)).padStart(2,"0") + ":" + String(m%60).padStart(2,"0"); };
+const post = (url, body) => fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+
+let MAP = null, S = null, base = null, view = "forest", god = false, tab = "today";
+let spritePrev = null, spriteNext = null, spriteT0 = 0;
+let diary = [], diaryCount = -1, diarySel = -1;
+let particles = [], selTile = null;
+const TP = 16; // base pixels per tile
+const cv = $("cv"), ctx = cv.getContext("2d");
+
+const ACT = {
+  scan: "scanning the horizon", watch_closely: "watching a sighting closely", log_weather: "taking a weather observation",
+  read: "reading", write: "writing in his notebook", think: "sitting and thinking", birdwatch: "watching birds",
+  carve: "whittling", chess: "playing chess", listen_radio: "listening to the radio", maintain: "doing maintenance",
+  cook_eat: "cooking and eating", chop_wood: "splitting firewood", fetch_water: "fetching water", garden: "tending the garden",
+  walk_to_lake: "hiking to the lake", fish: "fishing", hike_ridge: "hiking the ridge", project: "working on a project",
+  use_item: "using", nap: "napping", sleep: "asleep", repair: "fixing"
+};
+
+// ---------- tile art ----------
+function rand(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+function buildBase() {
+  const W = MAP.tiles[0].length, H = MAP.tiles.length;
+  base = document.createElement("canvas"); base.width = W * TP; base.height = H * TP;
+  const g = base.getContext("2d"), r = rand(77);
+  const col = {F:"#2e4a2a", M:"#71864a", R:"#837f76", S:"#dfe4e2", W:"#2f5f80", C:"#3f7aa0", O:"#8c7559",
+               T:"#2e4a2a", G:"#6f7f48", L:"#7b6f4c", P:"#968e7f", H:"#8c7559"};
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const t = MAP.tiles[y][x], X = x * TP, Y = y * TP;
+    g.fillStyle = col[t] || "#000"; g.fillRect(X, Y, TP, TP);
+    for (let i = 0; i < 10; i++) { // texture speckles
+      g.fillStyle = `rgba(0,0,0,${r() * .12})`; g.fillRect(X + (r() * TP | 0), Y + (r() * TP | 0), 2, 2);
+    }
+    if (t === "F" || t === "T" || t === "C") {
+      for (let i = 0; i < 4; i++) {
+        const cx = X + 2 + r() * (TP - 4), cy = Y + 3 + r() * (TP - 5), s = 2.5 + r() * 2.5;
+        g.fillStyle = r() < .5 ? "#1f3a20" : "#284a27";
+        g.beginPath(); g.moveTo(cx, cy - s * 1.4); g.lineTo(cx + s, cy + s); g.lineTo(cx - s, cy + s); g.fill();
+      }
+    }
+    if (t === "T") { g.fillStyle = "#b79f78"; for (let i = 0; i < 4; i++) g.fillRect(X + 3 + i * 3, Y + 7 + (i % 2), 2, 2); }
+    if (t === "C") { g.fillStyle = "#4f8bb3"; g.fillRect(X, Y + 6, TP, 4); }
+    if (t === "W" && r() < .5) { g.fillStyle = "rgba(255,255,255,.12)"; g.fillRect(X + r() * 10, Y + r() * 12, 5, 1); }
+    if (t === "M") { g.fillStyle = "#93a65c"; for (let i = 0; i < 5; i++) g.fillRect(X + r() * TP, Y + r() * TP, 1, 2); }
+    if (t === "L") { g.fillStyle = "#4a3d26"; for (let i = 0; i < 3; i++) g.fillRect(X + 2 + r() * 11, Y + 2 + r() * 11, 3, 3); }
+    if (t === "S") { g.fillStyle = "#b8c0c0"; g.fillRect(X + r() * 10, Y + r() * 10, 5, 3); }
+    if (t === "G") { g.fillStyle = "#d9c27a"; g.beginPath(); g.moveTo(X + 8, Y + 4); g.lineTo(X + 12, Y + 11); g.lineTo(X + 4, Y + 11); g.fill(); }
+    if (t === "H") { g.fillStyle = "#6b4a2b"; g.fillRect(X + 7, Y + 4, 2, 9); g.fillStyle = "#c9a86b"; g.fillRect(X + 3, Y + 4, 10, 4); }
+  }
+}
+
+let snowLayer = null;
+function buildSnow() {
+  const W = MAP.tiles[0].length, H = MAP.tiles.length;
+  snowLayer = document.createElement("canvas"); snowLayer.width = W * TP; snowLayer.height = H * TP;
+  const g = snowLayer.getContext("2d"), r = rand(99);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const t = MAP.tiles[y][x], X = x * TP, Y = y * TP;
+    if (t === "W") { g.fillStyle = "rgba(220,232,240,.85)"; g.fillRect(X, Y, TP, TP); continue; }
+    const wooded = t === "F" || t === "T" || t === "C";
+    g.fillStyle = wooded ? "rgba(236,242,247,.22)" : "rgba(240,245,249,.85)";
+    g.fillRect(X, Y, TP, TP);
+    if (wooded) for (let i = 0; i < 9; i++) { g.fillStyle = "rgba(255,255,255,.75)"; g.fillRect(X + r() * TP, Y + r() * TP, 3, 2); }
+  }
+}
+
+// ---------- camera ----------
+function camera() {
+  const W = MAP.tiles[0].length, H = MAP.tiles.length;
+  if (view === "forest") return {s: cv.width / W, ox: 0, oy: 0};
+  const [tx, ty] = MAP.tower, s = 80;
+  return {s, ox: tx + 0.5 - cv.width / s / 2, oy: ty + 0.6 - cv.height / s / 2};
+}
+const toScreen = (c, x, y) => [(x - c.ox) * c.s, (y - c.oy) * c.s];
+
+function darkness() {
+  if (!S) return 0;
+  const t = S.tod, r = S.sunrise, s = S.sunset;
+  if (t >= r + 30 && t <= s - 20) return 0;
+  if (t > r - 40 && t < r + 30) return 0.62 * (1 - (t - (r - 40)) / 70);
+  if (t > s - 20 && t < s + 50) return 0.62 * ((t - (s - 20)) / 70);
+  return 0.62;
+}
+
+// ---------- drawing ----------
+function drawTower(c) {
+  const [tx, ty] = MAP.tower;
+  ctx.strokeStyle = "#3b2f22"; ctx.lineWidth = 0.06;
+  for (const [a, b] of [[0.2, 0.3], [0.8, 0.7]]) {
+    ctx.beginPath(); ctx.moveTo(tx + a, ty + 1.25); ctx.lineTo(tx + b, ty + 0.5); ctx.stroke();
+  }
+  ctx.beginPath(); ctx.moveTo(tx + 0.27, ty + 0.9); ctx.lineTo(tx + 0.73, ty + 0.9); ctx.stroke();
+  ctx.fillStyle = "#6e5a42"; ctx.fillRect(tx + 0.05, ty + 0.48, 0.9, 0.06);           // catwalk
+  ctx.fillStyle = "#c9c1ae"; ctx.fillRect(tx + 0.18, ty + 0.12, 0.64, 0.38);          // cab
+  ctx.fillStyle = "#86b6cf"; ctx.fillRect(tx + 0.22, ty + 0.17, 0.56, 0.17);          // windows
+  ctx.fillStyle = "#4a3a2a"; ctx.beginPath(); ctx.moveTo(tx + 0.1, ty + 0.14); ctx.lineTo(tx + 0.5, ty - 0.06);
+  ctx.lineTo(tx + 0.9, ty + 0.14); ctx.fill();                                          // roof
+  ctx.fillStyle = "#3b2f22"; ctx.fillRect(tx + 0.49, ty - 0.25, 0.02, 0.2);             // mast
+  const L = S.locs;
+  ctx.fillStyle = "#7a5634"; for (let i = 0; i < 3; i++) ctx.fillRect(L.woodpile[0] - 0.25, L.woodpile[1] - 0.1 - i * 0.07, 0.5, 0.06);
+  ctx.fillStyle = "#4b3a24"; ctx.fillRect(L.garden[0] - 0.3, L.garden[1] - 0.15, 0.6, 0.3);
+  ctx.fillStyle = "#6f9b4a"; for (let i = 0; i < 3; i++) ctx.fillRect(L.garden[0] - 0.25, L.garden[1] - 0.1 + i * 0.09, 0.5, 0.03);
+  ctx.fillStyle = "#8d9496"; ctx.beginPath(); ctx.arc(L.cistern[0], L.cistern[1] - 0.12, 0.17, 0, 7); ctx.fill();
+  ctx.fillStyle = "#6a4e33"; ctx.fillRect(L.outhouse[0] - 0.13, L.outhouse[1] - 0.42, 0.26, 0.36);
+  ctx.fillStyle = "#3b2c1c"; ctx.fillRect(L.outhouse[0] - 0.05, L.outhouse[1] - 0.3, 0.1, 0.24);
+  ctx.strokeStyle = "rgba(255,255,255,.45)"; ctx.lineWidth = 0.03;
+  ctx.beginPath(); ctx.arc(L.helispot[0], L.helispot[1] - 0.1, 0.22, 0, 7); ctx.stroke();
+}
+
+function drawSprite(c, x, y, walking, t) {
+  const p = 0.055, X = x - 4 * p, Y = y - 12 * p;
+  const px = (cx, cy, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(X + cx * p, Y + cy * p, w * p, h * p); };
+  const leg = walking ? (Math.floor(t / 180) % 2) : 0;
+  px(1, 0, 6, 1, "#6b4a2b"); px(2, -1, 4, 1, "#7d5733");               // hat
+  px(2, 1, 4, 3, "#e0b48f"); px(3, 2, 1, 1, "#2a1d12"); px(5, 2, 1, 1, "#2a1d12"); px(2, 3, 4, 1, "#7a5a3c"); // face + beard
+  px(1, 4, 6, 4, "#55703d"); px(0, 4, 1, 3, "#55703d"); px(7, 4, 1, 3, "#55703d");   // shirt + arms
+  px(0, 7, 1, 1, "#e0b48f"); px(7, 7, 1, 1, "#e0b48f");
+  px(2, 8, 2, 3 - leg, "#3a3f55"); px(4, 8, 2, 2 + leg, "#3a3f55");     // legs
+  px(2, 11 - leg, 2, 1, "#2b2018"); px(4, 10 + leg, 2, 1, "#2b2018");   // boots
+}
+
+function wrap(text, maxW) {
+  const words = text.split(" "), lines = []; let line = "";
+  for (const w of words) { const t = line ? line + " " + w : w; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; }
+  if (line) lines.push(line); return lines.slice(0, 5);
+}
+function bubble(sx, sy, text, thought) {
+  ctx.font = "15px Georgia, serif";
+  const lines = wrap(text, 260), w = Math.min(280, Math.max(...lines.map(l => ctx.measureText(l).width)) + 20), h = lines.length * 19 + 12;
+  let bx = Math.min(cv.width - w - 6, Math.max(6, sx - w / 2)), by = Math.max(6, sy - h - 18);
+  ctx.fillStyle = thought ? "rgba(232,222,245,.95)" : "rgba(245,238,222,.95)"; ctx.strokeStyle = "#2c2418"; ctx.lineWidth = 1.5;
+  if (thought) ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.roundRect(bx, by, w, h, thought ? 16 : 8); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+  if (thought) { ctx.beginPath(); ctx.arc(sx, by + h + 7, 4, 0, 7); ctx.arc(sx + 3, by + h + 15, 2.5, 0, 7); ctx.fill(); }
+  else { ctx.beginPath(); ctx.moveTo(sx - 6, by + h); ctx.lineTo(sx, by + h + 10); ctx.lineTo(sx + 6, by + h); ctx.fill(); }
+  ctx.fillStyle = "#2c2418"; lines.forEach((l, i) => ctx.fillText(l, bx + 10, by + 21 + i * 19));
+}
+
+function render(ts) {
+  requestAnimationFrame(render);
+  if (!MAP || !S || !base) return;
+  const c = camera();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "#000"; ctx.fillRect(0, 0, cv.width, cv.height);
+  ctx.setTransform(c.s, 0, 0, c.s, -c.ox * c.s, -c.oy * c.s);
+  ctx.drawImage(base, 0, 0, MAP.tiles[0].length, MAP.tiles.length);
+  // burned ground
+  ctx.fillStyle = "rgba(25,20,18,.85)";
+  for (const k of S.burned) { const [x, y] = k.split(",").map(Number); ctx.fillRect(x, y, 1, 1); }
+  if (S.snow) { if (!snowLayer) buildSnow(); ctx.drawImage(snowLayer, 0, 0, MAP.tiles[0].length, MAP.tiles.length); }
+  // fire
+  for (const f of Object.values(S.fires)) for (const [k, cell] of Object.entries(f.cells)) {
+    const [x, y] = k.split(",").map(Number);
+    if (cell.st === "burn" && f.visible) {
+      const fl = Math.random();
+      ctx.fillStyle = fl < .5 ? "#ff7a1a" : fl < .8 ? "#ffb52e" : "#d12f12"; ctx.fillRect(x + .1, y + .1, .8, .8);
+      if (Math.random() < .25) particles.push({x: x + Math.random(), y: y + Math.random(), a: .55, r: .3});
+    } else if (god) { ctx.fillStyle = "rgba(255,120,0,.5)"; ctx.fillRect(x + .35, y + .35, .3, .3); }
+  }
+  // smoke
+  const wf = (S.wx.wind_from + 180) * Math.PI / 180, ws = 0.004 + S.wx.wind_mph * 0.0006;
+  particles = particles.filter(p => p.a > 0.02).slice(-500);
+  for (const p of particles) {
+    p.x += Math.sin(wf) * ws * 6; p.y -= Math.cos(wf) * ws * 6 + 0.004; p.r += 0.012; p.a *= 0.985;
+    ctx.fillStyle = `rgba(190,185,178,${p.a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
+  }
+  // lightning
+  for (const st of S.strikes) {
+    const age = S.minute - st.t;
+    if (age >= 0 && age < 3) {
+      ctx.strokeStyle = "rgba(255,255,230,.95)"; ctx.lineWidth = .12; ctx.beginPath();
+      let x = st.x + .5, y = st.y - 6; ctx.moveTo(x, y);
+      for (let i = 0; i < 6; i++) { x += (Math.random() - .5) * 1.2; y += 1.05; ctx.lineTo(x, y); }
+      ctx.lineTo(st.x + .5, st.y + .5); ctx.stroke();
+    }
+  }
+  drawTower(c);
+  // events (god view) and sightings
+  const evById = Object.fromEntries(S.events.map(e => [e.id, e]));
+  if (god) for (const e of S.events) {
+    ctx.fillStyle = {ambient: "#9fd4ff", notable: "#ffd36b", serious: "#ff6b5b", bizarre: "#e48cff", fire: "#ff8a2a", planted: "#fff"}[e.tier] || "#fff";
+    ctx.beginPath(); ctx.arc(e.x + .5, e.y + .5, .28, 0, 7); ctx.fill();
+  }
+  // scan line / watch cone
+  const a = S.agent, [tx, ty] = MAP.tower;
+  if (!a.asleep && a.activity === "scan" && !a.travel_from) {
+    const ang = (ts / 2500) % (Math.PI * 2);
+    ctx.strokeStyle = "rgba(255,230,160,.25)"; ctx.lineWidth = .15;
+    ctx.beginPath(); ctx.moveTo(tx + .5, ty + .3); ctx.lineTo(tx + .5 + Math.sin(ang) * 40, ty + .3 - Math.cos(ang) * 40); ctx.stroke();
+  }
+  if (!a.asleep && a.activity === "watch_closely") {
+    const sg = S.sightings.find(s => s.id === a.arg);
+    if (sg) {
+      const az = sg.az * Math.PI / 180, L = sg.mi * 2 + 2;
+      ctx.fillStyle = "rgba(255,230,160,.12)"; ctx.beginPath(); ctx.moveTo(tx + .5, ty + .3);
+      ctx.lineTo(tx + .5 + Math.sin(az - .08) * L, ty + .3 - Math.cos(az - .08) * L);
+      ctx.lineTo(tx + .5 + Math.sin(az + .08) * L, ty + .3 - Math.cos(az + .08) * L); ctx.fill();
+    }
+  }
+  // sprite position (smoothed)
+  let pos = a.pos;
+  if (spritePrev && spriteNext) {
+    const k = Math.min(1, (performance.now() - spriteT0) / 850);
+    pos = [spritePrev[0] + (spriteNext[0] - spritePrev[0]) * k, spritePrev[1] + (spriteNext[1] - spritePrev[1]) * k];
+  }
+  if (!a.asleep) drawSprite(c, pos[0], pos[1], !!a.travel_from, ts);
+  // night, weather overlays
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const dk = darkness();
+  if (dk > 0) { ctx.fillStyle = `rgba(8,12,35,${dk})`; ctx.fillRect(0, 0, cv.width, cv.height); }
+  if (dk > 0.2) { // fires glow through the dark; cab light
+    ctx.setTransform(c.s, 0, 0, c.s, -c.ox * c.s, -c.oy * c.s);
+    for (const f of Object.values(S.fires)) if (f.visible) for (const [k, cell] of Object.entries(f.cells)) if (cell.st === "burn") {
+      const [x, y] = k.split(",").map(Number);
+      const g = ctx.createRadialGradient(x + .5, y + .5, 0, x + .5, y + .5, 1.6);
+      g.addColorStop(0, "rgba(255,140,40,.55)"); g.addColorStop(1, "rgba(255,140,40,0)"); ctx.fillStyle = g; ctx.fillRect(x - 1.5, y - 1.5, 4, 4);
+    }
+    if (!a.asleep || S.thinking) { ctx.fillStyle = "rgba(255,214,120,.9)"; ctx.fillRect(tx + .22, ty + .17, .56, .17); }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  if (S.wx.fog) { const g = ctx.createLinearGradient(0, cv.height * .3, 0, cv.height); g.addColorStop(0, "rgba(225,230,235,0)"); g.addColorStop(1, "rgba(225,230,235,.5)"); ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height); }
+  if (S.wx.snowing) {
+    ctx.fillStyle = "rgba(255,255,255,.75)";
+    for (let i = 0; i < 220; i++) { const x = (Math.random() * cv.width + ts * .02) % cv.width, y = Math.random() * cv.height; ctx.fillRect(x, y, 2, 2); }
+  }
+  if (S.wx.raining) {
+    ctx.strokeStyle = "rgba(180,200,230,.35)"; ctx.lineWidth = 1;
+    for (let i = 0; i < 160; i++) { const x = Math.random() * cv.width, y = Math.random() * cv.height; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 4, y + 12); ctx.stroke(); }
+  }
+  if (S.strikes.some(st => S.minute - st.t >= 0 && S.minute - st.t < 1) && Math.random() < .3) { ctx.fillStyle = "rgba(255,255,240,.18)"; ctx.fillRect(0, 0, cv.width, cv.height); }
+  // sighting labels (screen space so they stay readable)
+  ctx.font = "bold 12px system-ui";
+  for (const sg of S.sightings) {
+    if (sg.status !== "open") continue;
+    const e = evById[sg.event]; if (!e) continue;
+    const [sx, sy] = toScreen(c, e.x + .5, e.y + .5);
+    ctx.strokeStyle = "#ffd36b"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, sy, 10, 0, 7); ctx.stroke();
+    ctx.fillStyle = "#ffd36b"; ctx.fillText(sg.id + (sg.report ? " ✓" : ""), sx + 12, sy - 8);
+  }
+  if (god) for (const e of S.events) { const [sx, sy] = toScreen(c, e.x + .5, e.y + .5); ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.font = "11px system-ui"; ctx.fillText(e.key, sx + 8, sy + 14); }
+  if (selTile) { const [sx, sy] = toScreen(c, selTile[0], selTile[1]); ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(sx, sy, c.s, c.s); }
+  // speech bubble / zzz
+  const [px, py] = toScreen(c, pos[0], pos[1] - .7);
+  if (a.asleep) { ctx.fillStyle = "rgba(230,230,255,.85)"; ctx.font = "bold 16px Georgia"; const [zx, zy] = toScreen(c, tx + .8, ty - .1); ctx.fillText("z z z", zx + Math.sin(ts / 600) * 3, zy); }
+  else {
+    const lastV = S.voice.length ? S.voice[S.voice.length - 1] : null;
+    if (lastV && lastV.from === "julian" && S.minute - lastV.t < 30) bubble(px, py, "(" + lastV.text + ")", true);
+    else if (a.say && S.minute - a.say_t < 40) bubble(px, py, a.say);
+  }
+}
+
+// ---------- panels ----------
+const prioCol = {routine: "#6f6757", urgent: "#c7862e", emergency: "#c0392b"};
+function renderNow() {
+  const a = S.agent, name = S.character.short_name;
+  let doing = a.asleep ? "asleep" : (ACT[a.activity] || a.activity);
+  if (a.arg && ["read", "use_item", "project", "repair"].includes(a.activity)) doing += ": " + a.arg;
+  if (a.arg && a.activity === "watch_closely") doing += " (" + a.arg + ")";
+  $("nowTitle").textContent = `${name} is ${doing}`;
+  $("nowSub").textContent = a.asleep ? `Wakes around ${hhmm(a.wake_at)}` :
+    `${a.travel_from ? "On his way, " : ""}${a.loc_name} · since ${hhmm(a.start)} · feels ${a.feel}`;
+  $("thought").textContent = a.thought ? "“" + a.thought + "”" : "";
+  const tr = S.brain && S.brain.trying;
+  const trying = !tr ? "" : tr.startsWith("waiting") ? " (a model is busy; waiting for it)" : ` (asking ${tr.replace("gemini:", "")})`;
+  $("thinking").textContent = S.thinking ? S.thinking + "..." + trying + " The world waits while he thinks." : "";
+  const n = a.needs, bars = [["Energy", n.energy, "#8fb36a"], ["Hunger", n.hunger, "#d9a04c"], ["Boredom", n.boredom, "#b08fd0"], ["Lonely", n.lonely, "#7fb0d0"]];
+  $("needs").innerHTML = bars.map(([l, v, c]) => `<div class="need"><label>${l}</label><div class="bar"><i style="width:${v}%;background:${c}"></i></div></div>`).join("");
+}
+function renderToday() {
+  const el = $("p-today");
+  const rows = S.today.slice().reverse().map(x => `<div class="k-${x.kind}"><span class="t">${hhmm(x.t)}</span>${esc(x.text)}</div>`).join("");
+  el.innerHTML = rows || `<div class="muted">Nothing yet today.</div>`;
+}
+let lastRadioLen = -1;
+function renderRadio() {
+  const el = $("p-radio"), stick = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+  const open = Object.fromEntries(S.reports.filter(r => r.status === "open").map(r => [r.id, r]));
+  const name = S.character.short_name;
+  el.innerHTML = S.radio.map(m => {
+    const cls = m.from === name ? "julian" : m.from === "Dispatch (you)" ? "you" : m.from.includes("auto") ? "auto" : m.from.includes("relay") ? "relay" : "base";
+    const rep = m.report && open[m.report] && m.from === name ? open[m.report] : null;
+    const r2 = m.report ? S.reports.find(r => r.id === m.report) : null;
+    const prio = r2 && m.from === name ? `<span class="prio" style="background:${prioCol[r2.priority]}">${r2.priority}</span>` : "";
+    const acts = rep ? `<div class="acts">
+        <button onclick="act('${rep.id}','crew')">Send crew</button><button onclick="act('${rep.id}','ranger')">Send ranger</button>
+        <button onclick="act('${rep.id}','watch')">Keep watching</button><button onclick="act('${rep.id}','disregard')">Disregard</button></div>` : "";
+    return `<div class="msg ${cls}"><div class="who">${esc(m.from)} · D${Math.floor(m.t / 1440) + 1} ${hhmm(m.t)}${prio}</div>${esc(m.text)}${acts}</div>`;
+  }).join("") || `<div class="muted">Radio is quiet.</div>`;
+  if (stick || lastRadioLen !== S.radio.length) el.scrollTop = el.scrollHeight;
+  lastRadioLen = S.radio.length;
+}
+window.act = (id, action) => post("/api/report", {id, action}).then(poll);
+let thoughts = [], thoughtsAt = 0;
+async function loadThoughts() {
+  thoughts = await (await fetch("/api/thoughts")).json(); thoughtsAt = Date.now(); renderThoughts();
+}
+function renderThoughts() {
+  const el = $("p-thoughts"); let out = "", day = -1;
+  const q = ($("thSearch") && $("thSearch").value || "").toLowerCase();
+  for (const t of thoughts.slice().reverse()) {
+    if (q && !t.text.toLowerCase().includes(q)) continue;
+    const d = Math.floor(t.t / 1440) + 1;
+    if (d !== day) { out += `<div class="dayhead">Day ${d}</div>`; day = d; }
+    out += `<div class="th ${t.kind}"><q>${esc(t.text)}</q><div class="meta">${hhmm(t.t)} · ${t.kind === "reaction" ? "reacting to something he heard" : esc((t.doing || "").replace(/_/g, " "))}</div></div>`;
+  }
+  const keep = $("thSearch") ? $("thSearch").value : "";
+  el.innerHTML = `<input type="text" id="thSearch" placeholder="Search his thoughts..." style="width:100%;margin-bottom:6px" value="${esc(keep)}">` +
+    (out || `<div class="muted">No thoughts saved yet. They're recorded from now on.</div>`);
+  const inp = $("thSearch"); inp.oninput = renderThoughts;
+  if (q) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+let lastVoiceLen = -1;
+function renderVoice() {
+  const el = $("p-voice"), name = S.character.short_name;
+  const intro = `<div class="muted" style="margin-bottom:10px">You are a voice inside ${esc(name)}'s head. He hears you as something that isn't his own thought, and he decides whether to answer, doubt you, or ignore you. If he's asleep, you'll reach him in a dream.</div>`;
+  const rows = S.voice.map(v => v.from === "voice"
+    ? `<div class="msg voice"><div class="who">The voice · D${Math.floor(v.t / 1440) + 1} ${hhmm(v.t)}${v.dream ? " · in a dream" : ""}</div>${esc(v.text)}</div>`
+    : `<div class="msg inner"><div class="who">${esc(name)}, in his head · D${Math.floor(v.t / 1440) + 1} ${hhmm(v.t)}</div>${esc(v.text)}</div>`).join("");
+  const pend = S.voice_pending ? `<div class="muted">${S.agent.asleep ? "He's asleep. He'll hear it in a dream and react when he wakes." : "He's hearing it..."}</div>` : "";
+  el.innerHTML = intro + rows + pend;
+  if (lastVoiceLen !== S.voice.length) el.scrollTop = el.scrollHeight;
+  lastVoiceLen = S.voice.length;
+}
+const sendVoice = () => { const t = $("voiceText").value.trim(); if (!t) return; post("/api/voice", {text: t}).then(() => { $("voiceText").value = ""; poll(); }); };
+function renderLog() {
+  $("p-log").innerHTML = S.log.slice().reverse().map(x => `<div>D${Math.floor(x.t / 1440) + 1} ${hhmm(x.t)}  ${esc(x.text)}</div>`).join("");
+}
+function renderMind() {
+  const L = Object.entries(S.ledger).sort((a, b) => Math.abs(b[1].score) - Math.abs(a[1].score));
+  const feel = L.map(([k, v]) => {
+    const pct = Math.min(50, Math.abs(v.score) * 5), pos = v.score >= 0;
+    const word = v.score >= 4 ? "loves" : v.score >= 1.5 ? "likes" : v.score <= -4 ? "hates" : v.score <= -1.5 ? "dislikes" : "unsure";
+    return `<div class="feel"><div>${esc(k)} <small>${word} · ${esc(v.notes[v.notes.length - 1] || "")}</small></div>
+      <div class="fbar"><i style="left:${pos ? 50 : 50 - pct}%;width:${pct}%;background:${pos ? "#8fb36a" : "#d9634c"}"></i></div></div>`;
+  }).join("") || `<div class="muted">No opinions yet. They form from what happens to him.</div>`;
+  const bel = S.beliefs.length ? `<ul class="plain">${S.beliefs.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : `<div class="muted">Nothing concluded yet.</div>`;
+  const pr = S.projects.length ? `<ul class="plain">${S.projects.map(p => `<li><b>${esc(p.name)}</b> <span class="muted">${p.status}, day ${p.day + 1}, ${p.sessions} sessions</span><br>${esc(p.notes[p.notes.length - 1] || "")}</li>`).join("")}</ul>` : `<div class="muted">No side projects yet.</div>`;
+  const fx = S.fixables || [];
+  const rep = fx.length ? `<ul class="plain">${fx.map(f => `<li>${esc(f.name)} <span class="muted">${f.broken ? (f.times_fixed ? "broken again" : "broken") + (f.attempts ? `, ${f.attempts} failed tr${f.attempts > 1 ? "ies" : "y"}` : "") : "fixed on day " + (f.fixed_day + 1)}</span></li>`).join("")}</ul>` : `<div class="muted">Nothing noticed yet.</div>`;
+  const inv = `<ul class="plain">${S.inventory.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`;
+  $("p-mind").innerHTML = `<h4>Likes and dislikes</h4>${feel}<h4>What he's concluded</h4>${bel}<h4>Facts about his life</h4>${(S.self_facts || []).length ? `<ul class="plain">${S.self_facts.map(f => `<li>${esc(f.text)} <span class="muted">day ${f.day + 1}</span></li>`).join("")}</ul>` : `<div class="muted">Nothing established yet. Ask him about his past.</div>`}<h4>Side projects</h4>${pr}<h4>Repairs</h4>${rep}<h4>His things</h4>${inv}
+    <h4>Stats</h4><div class="muted">Model calls: ${S.stats.llm_calls} · autopilot decisions: ${S.stats.offline_calls}</div>
+    <div class="muted">Calls since this window opened, today (Google's day): ${Object.entries(S.brain.daily_counts || {}).map(([k, v]) => k.replace("gemini:", "") + " " + v).join(", ") || "none yet"}</div>`;
+}
+async function loadDiary() {
+  diary = await (await fetch("/api/diary")).json();
+  if (diarySel < 0 || diarySel >= diary.length) diarySel = diary.length - 1;
+  renderDiary();
+}
+function renderDiary() {
+  $("days").innerHTML = diary.map((d, i) => `<div class="${i === diarySel ? "on" : ""}" onclick="pickDay(${i})">Day ${d.day + 1}<br>${esc(d.date)}${d.year ? ", Y" + d.year : ""}</div>`).reverse().join("");
+  const d = diary[diarySel];
+  $("page").innerHTML = d ? `<h3>Day ${d.day + 1} · ${esc(d.date)}${d.year ? ", Year " + d.year : ""}</h3>${esc(d.text)}${d.tomorrow ? `<div class="tmr">Tomorrow: ${esc(d.tomorrow)}</div>` : ""}`
+                          : `<span class="muted">No entries yet. He writes before bed.</span>`;
+}
+window.pickDay = i => { diarySel = i; renderDiary(); };
+
+function renderHeader() {
+  $("title").textContent = S.place.lookout;
+  $("clock").textContent = `Day ${S.day} · ${S.date}, Year ${S.year} · ${S.time}`;
+  const w = S.wx, dir = ["N","NE","E","SE","S","SW","W","NW"][Math.round(w.wind_from / 45) % 8];
+  $("wx").textContent = `${w.desc}, ${w.temp}°F · wind ${dir} ${w.wind_mph} mph · RH ${w.rh}%`;
+  $("wx").textContent += ` · ${S.season}`;
+  const dc = {"Off season": "#4a4a4a", Low: "#3d6b3a", Moderate: "#2f5f80", High: "#a17a1e", "Very High": "#b4521f", Extreme: "#a3241a"}[w.danger];
+  $("danger").textContent = "Fire danger: " + w.danger; $("danger").style.background = dc;
+  $("speeds").innerHTML = [[0, "⏸"], [1, "1×"], [5, "5×"], [20, "20×"], [60, "60×"]].map(([v, l]) =>
+    `<button class="${S.speed == v ? "on" : ""}" onclick="speed(${v})" title="${v ? v + " sim-minutes per second" : "pause"}">${l}</button>`).join("");
+  const b = S.brain;
+  $("bdot").style.background = b.ok === true ? "#8fb36a" : b.ok === false ? "#d9634c" : "#6f6757";
+  $("btext").textContent = b.chain.length === 0 ? "No model set up (autopilot)" : b.ok === false ? "Model trouble: " + (b.error || "") :
+    b.model ? "Brain: " + b.model.replace("gemini:", "") : "Brain: waiting";
+  $("btext").title = (b.error || "") + "\nChain: " + b.chain.join(" → ") + "\nAvailable now: " + b.available.join(", ");
+}
+window.speed = v => post("/api/speed", {speed: v}).then(poll);
+$("btext").style.cursor = "pointer";
+$("btext").onclick = () => { const b = S && S.brain; if (!b) return;
+  toast((b.error ? "Last error: " + b.error : "No errors right now.") + "  |  Models: " + b.chain.map(c => c.replace("gemini:", "")).join(" → "), 15000); };
+
+// ---------- brain-limit warnings ----------
+const RANK = {none: 0, full: 0, backup: 1, autopilot: 2};
+let ackRank = 0, modalOpen = false;
+function resetText(b) {
+  if (!b.reset_at) return "Google resets the free daily limits once a day (around 10:00 Latvian time).";
+  const t = new Date(b.reset_at * 1000);
+  return `His full brain comes back when Google resets the free limits: about ${t.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})} on ${t.toLocaleDateString([], {weekday: "long"})}.`;
+}
+function checkBrain() {
+  const b = S.brain, name = S.character.short_name;
+  // only warn about a backup brain when the main models are really out for the day
+  const eff = b.tier === "backup" && !b.main_out ? "full" : b.tier;
+  const r = RANK[eff] ?? 0;
+  if (r === 0 && ackRank > 0) { ackRank = 0; toast(`${name} is back on his full brain.`); }
+  if (r > ackRank && !modalOpen) {
+    modalOpen = true;
+    if (b.tier === "backup") {
+      $("mTitle").textContent = `${name} has hit today's limit`;
+      $("mBody").textContent = `His sharpest brain is used up for today. He's now thinking with a backup (${(b.model || "").replace("gemini:", "")}). He's still himself, since his memories, diary and opinions are all saved, but he'll be a bit duller and slower until it resets.`;
+    } else {
+      $("mTitle").textContent = `${name} is brain dead`;
+      $("mBody").textContent = `Every model has hit its limit or isn't answering. The world keeps running and he keeps to simple routines (scanning, eating, sleeping), but he can't really think, talk back or write in his diary until a brain comes back. You can keep going, or pause the world until then.`;
+    }
+    $("mReset").textContent = resetText(b);
+    $("modalBg").style.display = "flex";
+  }
+  const tb = b.tier === "backup" && !b.main_out ? ["Backup brain (briefly)", "#7a6a2a"] :
+    ({full: ["Full brain", "#3d6b3a"], backup: ["Backup brain", "#a17a1e"], autopilot: ["Brain dead", "#a3241a"], none: ["", ""]}[b.tier] || ["", ""]);
+  $("tierBadge").textContent = tb[0]; $("tierBadge").style.background = tb[1]; $("tierBadge").style.display = tb[0] ? "" : "none";
+}
+function closeModal() { ackRank = RANK[S.brain.tier] ?? 0; modalOpen = false; $("modalBg").style.display = "none"; }
+$("mGo").onclick = closeModal;
+$("mPause").onclick = () => { closeModal(); speed(0); };
+function toast(t, ms) { const el = $("toast"); el.textContent = t; el.style.display = "block"; el.style.maxWidth = "80vw";
+  clearTimeout(toast.h); toast.h = setTimeout(() => el.style.display = "none", ms || 5000); }
+
+async function poll() {
+  try {
+    const r = await fetch("/api/state"); const next = await r.json();
+    if (S && S.agent) { spritePrev = spriteNext || S.agent.pos; } else spritePrev = next.agent.pos;
+    spriteNext = next.agent.pos; spriteT0 = performance.now();
+    S = next;
+    renderHeader(); renderNow(); checkBrain();
+    if (tab === "today") renderToday();
+    if (tab === "radio") renderRadio();
+    if (tab === "log") renderLog();
+    if (tab === "voice") renderVoice();
+    if (tab === "thoughts" && Date.now() - thoughtsAt > 5000 && !(document.activeElement && document.activeElement.id === "thSearch")) loadThoughts();
+    if (tab === "mind") renderMind();
+    if (S.diary_count !== diaryCount) { const was = diaryCount; diaryCount = S.diary_count; if (was !== -1) diarySel = -1; if (tab === "diary" || was === -1) loadDiary(); }
+  } catch (e) { $("thinking").textContent = "Lost contact with the lookout. Is the black window still open?"; }
+}
+
+// ---------- UI wiring ----------
+$("tabs").onclick = e => {
+  const p = e.target.dataset.p; if (!p) return; tab = p;
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("on", b.dataset.p === p));
+  document.querySelectorAll(".pane").forEach(el => el.classList.toggle("on", el.id === "p-" + p));
+  $("radioIn").style.display = p === "radio" ? "flex" : "none";
+  $("voiceIn").style.display = p === "voice" ? "flex" : "none";
+  if (p === "diary") loadDiary(); else if (p === "thoughts") loadThoughts(); else poll();
+};
+const setView = v => { view = v; $("vForest").classList.toggle("on", v === "forest"); $("vSummit").classList.toggle("on", v === "summit"); };
+$("vForest").onclick = () => setView("forest");
+$("vSummit").onclick = () => setView("summit");
+$("vGod").onclick = () => { god = !god; $("vGod").classList.toggle("on", god); };
+const TNAME = {F: "forest", M: "meadow", R: "rock", S: "snowfield", W: Object.freeze("lake"), C: "creek", O: "road", T: "trail", G: "campground", L: "logging cut", P: "the summit", H: "trailhead"};
+cv.onclick = e => {
+  const rect = cv.getBoundingClientRect(), c = camera();
+  const x = Math.floor(((e.clientX - rect.left) * cv.width / rect.width) / c.s + c.ox);
+  const y = Math.floor(((e.clientY - rect.top) * cv.height / rect.height) / c.s + c.oy);
+  if (y < 0 || y >= MAP.tiles.length || x < 0 || x >= MAP.tiles[0].length) return;
+  selTile = [x, y];
+  const [tx, ty] = MAP.tower, dx = x - tx, dy = y - ty;
+  const az = Math.round((Math.atan2(dx, -dy) * 180 / Math.PI + 360) % 360), mi = (Math.hypot(dx, dy) * .5).toFixed(1);
+  $("plantInfo").textContent = `${TNAME[MAP.tiles[y][x]] || "?"} · azimuth ${String(az).padStart(3, "0")}° · ${mi} mi from the tower`;
+  $("plant").style.display = "flex"; $("plantText").focus();
+};
+$("plantX").onclick = () => { selTile = null; $("plant").style.display = "none"; };
+$("plantBtn").onclick = () => {
+  const text = $("plantText").value.trim(); if (!text || !selTile) return;
+  post("/api/plant", {x: selTile[0], y: selTile[1], text}).then(() => { $("plantText").value = ""; selTile = null; $("plant").style.display = "none"; });
+};
+$("plantText").onkeydown = e => { if (e.key === "Enter") $("plantBtn").click(); };
+const sendRadio = () => { const t = $("radioText").value.trim(); if (!t) return; post("/api/radio", {text: t}).then(() => { $("radioText").value = ""; poll(); }); };
+$("radioSend").onclick = sendRadio;
+$("voiceSend").onclick = sendVoice;
+$("voiceText").onkeydown = e => { if (e.key === "Enter") sendVoice(); };
+$("radioText").onkeydown = e => { if (e.key === "Enter") sendRadio(); };
+
+(async () => {
+  MAP = await (await fetch("/api/map")).json();
+  buildBase();
+  await poll();
+  setInterval(poll, 800);
+  requestAnimationFrame(render);
+})();
+</script>
+</body>
+</html>

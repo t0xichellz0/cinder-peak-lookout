@@ -1,0 +1,4 @@
+config.json
+save/
+__pycache__/
+.version

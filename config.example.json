@@ -1,0 +1,47 @@
+{
+  "gemini_api_key": "PASTE-YOUR-GEMINI-KEY-HERE",
+  "update_repo": "",
+  "gemini_models": ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+
+  "groq_api_key": "",
+  "groq_model": "openai/gpt-oss-120b",
+  "ollama_model": "",
+
+  "default_speed": 1,
+  "skip_nights": true,
+  "auto_dispatch": true,
+  "auto_dispatch_minutes": 45,
+  "min_seconds_between_calls": 4,
+  "port": 8765,
+  "world_seed": 4127,
+
+  "character": {
+    "name": "Julian Raymond Rhodes",
+    "short_name": "Julian",
+    "age": "25",
+    "hometown": "a small town in Oregon of about ten thousand people",
+    "traits": [
+      "analytical",
+      "suspicious of basic answers; wants to know the deeper reason",
+      "an intellectual young man",
+      "ideologically committed to his beliefs, but open to criticism and adjustment",
+      "thinks big; drawn to something grand",
+      "prepared for the worst"
+    ],
+    "why_here": "He took the job to give himself space from the rushed world, and time to think and to discover himself and other truths."
+  },
+
+  "place": {
+    "lookout": "Cinder Peak Lookout",
+    "peak": "Cinder Peak",
+    "forest": "Castle Fork National Forest",
+    "lake": "Hollis Lake",
+    "creek": "Little Hollis Creek",
+    "road": "Forest Road 412",
+    "trailhead": "Hollis Lake Trailhead",
+    "campground": "Aspen Flat Campground",
+    "town": "Marlow",
+    "town_miles": 30,
+    "dispatch": "Marlow Dispatch"
+  }
+}
