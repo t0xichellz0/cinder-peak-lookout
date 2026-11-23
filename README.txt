@@ -6,10 +6,14 @@ FIRST TIME
 2. Replace PASTE-YOUR-GEMINI-KEY-HERE with your key. Keep the quote marks.
 3. Save and close.
 
-EVERY TIME
-Double-click start.bat. A black window opens (leave it open) and your browser
-opens the lookout page. Closing the black window pauses the world; it's saved
-and continues next time.
+DESKTOP ICON (once)
+Double-click "Create desktop icon.bat". After that, open the game from the
+"Cinder Peak Lookout" icon on your desktop or in the Start menu. It opens in its
+own window, updates itself first, and closing the window saves and pauses the world.
+If something goes wrong, the details are in save\launcher.log.
+
+OLD WAY
+start.bat still works: a black window plus the page in your browser.
 
 THE PAGE
 - Map: 3D by default. Scroll or pinch to zoom, drag to pan, right-drag (or two-finger

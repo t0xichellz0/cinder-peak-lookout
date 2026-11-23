@@ -126,6 +126,7 @@ def make_handler(sim, brain):
             self.wfile.write(data)
 
         def do_GET(self):
+            LAST_REQUEST[0] = time.time()
             p = self.path.split("?")[0]
             if p in ("/", "/index.html"):
                 with open(os.path.join(web, "index.html"), "rb") as f:
@@ -186,7 +187,11 @@ def make_handler(sim, brain):
     return H
 
 
-def main():
+LAST_REQUEST = [time.time()]
+
+
+def start(open_browser=False):
+    """Start the world and the web server in the background. Returns (url, cfg, shutdown)."""
     cfg = load_config()
     sim = Sim(cfg, os.path.join(HERE, "save"))
     brain = Brain(cfg)
@@ -201,21 +206,39 @@ def main():
             break
         except OSError:
             continue
+    threading.Thread(target=server.serve_forever, daemon=True).start()
     url = f"http://localhost:{port}"
-    name = cfg["character"]["short_name"]
-    print(f"\n  {cfg['place']['lookout']} is running at {url}")
+    print(f"  {cfg['place']['lookout']} is running at {url}")
     print(f"  Brain: {', '.join(brain.describe()['chain']) or 'NONE (autopilot only) - check config.json'}")
-    print(f"  Keep this window open while {name} is alive. Close it to pause the world (it's saved).\n")
-    if cfg.get("open_browser", True):
+    if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    def shutdown():
+        stop.set()
+        time.sleep(0.3)
+        sim.save()
+        server.shutdown()
+        print("  Saved. Goodbye.")
+    return url, cfg, shutdown
+
+
+def main():
+    url, cfg, shutdown = start(open_browser=cfg_open_browser())
+    print(f"  Keep this window open while {cfg['character']['short_name']} is alive. Close it to pause the world (it's saved).\n")
     try:
-        server.serve_forever()
+        while True:
+            time.sleep(1)
     except KeyboardInterrupt:
         pass
     finally:
-        stop.set()
-        sim.save()
-        print("Saved. Goodbye.")
+        shutdown()
+
+
+def cfg_open_browser():
+    try:
+        return bool(load_config().get("open_browser", True))
+    except Exception:
+        return True
 
 
 if __name__ == "__main__":
